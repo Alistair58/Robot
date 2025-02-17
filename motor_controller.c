@@ -13,10 +13,11 @@
 #define SERVICE_UUID        "94f493c8_c579_41c2_87ac_e12c02455864"  // UART Service
 #define CHAR_UUID_RX        "94f493c9_c579_41c2_87ac_e12c02455864"  // Receive Characteristic (phone -> pico)
 #define CHAR_UUID_TX        "94f493ca_c579_41c2_87ac_e12c02455864"  // Transmit Characteristic (pico -> phone)
-#define APP_AD_FLAGS 0x06 //The flag 0x06 indicates: LE General Discoverable Mode and BR/EDR not supported.
+#define APP_AD_FLAGS 0x06 //The flag 0x06 indicates: LE General Discoverable Mode and BR/EDR ncot supported.
 static btstack_packet_callback_registration_t hci_event_callback_registration;
+static btstack_context_callback_registration_t context_registration;
 static hci_con_handle_t con_handle;
-static int  le_notification_enabled;
+static int  le_notification_enabled = 1;
 char counter_string[12] = "Hello World";
 int counter_string_len = 12;
 const uint8_t adv_data[] = { //Advertising data
@@ -33,44 +34,41 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 static uint16_t att_read_callback(hci_con_handle_t con_handle, uint16_t att_handle, uint16_t offset, uint8_t * buffer, uint16_t buffer_size);
 static int att_write_callback(hci_con_handle_t con_handle, uint16_t att_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size);
 void motorTest();
+static void beat(void);
+static void heartbeat_handler(struct btstack_timer_source *ts);
+static void notify_callback(void *context);
+void ble_send_notification();
 
 int main()
 {
     
     stdio_init_all();
 
-    // Initialise the Wi-Fi chip
+    // Initialise the Wi-Fi, Bluetooth and light chip
     if (cyw43_arch_init()) {
-        printf("Wi-Fi init failed\n");
+        printf("CYW43 init failed\n");
         return -1;
     }
-    sleep_ms(2000); //So I can press the monitor button
-    printf("\nStarting");
     // Turn on the LED
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-    printf("\nLED on");
+    printf("\nLED on");    
     ble_setup();
-    printf("\nBLE set up");
+
     //Bluetooth Host controller interface
     hci_power_control(HCI_POWER_ON);
-    printf("\nPower on");
+
     while(1) {
-        sleep_ms(1000);
-        printf("\nWaiting...");
         tight_loop_contents(); //Keep the device on
     }
     return 0;
     
 }
-
+static btstack_timer_source_t heartbeat;
+#define HEARTBEAT_PERIOD_MS 1000
 static void ble_setup(){
-    printf("\nBLE setting up");
-    //Doesn't get here
     l2cap_init();
-    printf("\nl2cap init complete");
     // setup SM (security manager): Display only
     sm_init();
-    printf("\nsm init complete");
     // setup ATT server
     att_server_init(profile_data, att_read_callback, att_write_callback);    
     printf("\natt server init complete");
@@ -91,6 +89,14 @@ static void ble_setup(){
 
     // register for ATT event
     att_server_register_packet_handler(packet_handler);
+    sleep_ms(1000);
+    // set one-shot timer
+    heartbeat.process = &heartbeat_handler;
+    btstack_run_loop_set_timer(&heartbeat, HEARTBEAT_PERIOD_MS);
+    btstack_run_loop_add_timer(&heartbeat);
+
+    // beat once
+    beat();
 }
 
 /* 
@@ -100,20 +106,62 @@ static void ble_setup(){
  *        - stop the counter after a disconnect
  *        - send a notification when the requested ATT_EVENT_CAN_SEND_NOW is received
  */
+static int counter = 0;
+
+ static void beat(void){
+    printf("\nHello world");
+}
+static void heartbeat_handler(struct btstack_timer_source *ts){
+    printf("\nHeartbeat le_notification_enabled: %d",le_notification_enabled);
+    if (le_notification_enabled) {
+        beat();
+        ble_send_notification();
+        //DEVICE MUST HAVE NOTIFICATIONS ENABLED
+    }
+
+    btstack_run_loop_set_timer(ts, HEARTBEAT_PERIOD_MS);
+    btstack_run_loop_add_timer(ts);
+} 
+// called by the stack, to send a notification
+static void notify_callback(void *context) {
+    printf("\nnotify_callback calling att_server_notify");
+    int err = att_server_notify(
+        con_handle,
+        ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,
+        (uint8_t*) counter_string, counter_string_len
+    );
+    if (err) {
+        printf("\nnotify_callback - error!");
+    }
+}
+
+// use ble_send_notification to send a notification
+void ble_send_notification() {
+    if (le_notification_enabled) {
+        printf("\nble_send_notification");
+        context_registration.callback = &notify_callback;
+        context_registration.context = NULL; //Always sending the same notification - no need to pass it values
+        // tell the stack to call the notify_callback if it is OK to send a notification:
+        uint8_t result = att_server_request_to_send_notification(&context_registration, con_handle);
+        printf("\nRequest result %d",result);
+    }
+}
+
 
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
-    printf("\nPacket handler");
+    printf("\nPacket handler; packet_type %d",packet_type);
     UNUSED(channel);
     UNUSED(size);
-
-    if (packet_type != HCI_EVENT_PACKET) return;
+    bd_addr_t addr;
+    bd_addr_type_t addr_type; 
     
-    switch (hci_event_packet_get_type(packet)) {
+    if (packet_type != HCI_EVENT_PACKET) return;
+    uint8_t hci_event = hci_event_packet_get_type(packet);
+    printf("\nhci_event: %d",hci_event);
+    switch (hci_event) {
         case HCI_EVENT_DISCONNECTION_COMPLETE:
+            printf("\nDisconnection complete");
             le_notification_enabled = 0;
-            break;
-        case ATT_EVENT_CAN_SEND_NOW:
-            att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE, (uint8_t*) counter_string, counter_string_len);
             break;
         default:
             break;
@@ -162,6 +210,7 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     switch (att_handle){
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
             le_notification_enabled = little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
+            printf("\nle_notification_enabled %d",le_notification_enabled);
             con_handle = connection_handle;
             break;
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
