@@ -39,6 +39,7 @@
     "files.associations": {
         "cyw43_arch.h": "c",
         "btstack.h": "c",
-        "cmath": "c"
+        "cmath": "c",
+        "math.h": "c"
     }
 }
