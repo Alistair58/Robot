@@ -88,7 +88,7 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
             //0xa1 is the doubleCheck first packet (MOTOR_CONTROL_PACKET)
             if(buffer[0]==MOTOR_CONTROL_PACKET){
                 //printf("\nIncoming motor control packet");
-                motor_control(buffer[1],buffer[2]);
+                update_throttle(buffer[1],buffer[2]);
             }
             break;
         default:
