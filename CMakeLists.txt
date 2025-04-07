@@ -56,6 +56,7 @@ target_link_libraries(robot_control
         pico_btstack_ble
         pico_btstack_cyw43
         pico_cyw43_arch_none
+        pico_multicore
         hardware_pwm
         hardware_adc
         )
