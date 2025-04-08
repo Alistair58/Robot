@@ -8,6 +8,7 @@
 #include "hardware/pwm.h"
 #include "hardware/adc.h"
 #include "controller_ble.h" //The gatt file compiled by cmake
+#include "ultrasound.h"
 
 
 
@@ -35,9 +36,8 @@ uint r_channel;
 #define SM_IN2 1
 #define SM_IN3 2
 #define SM_IN4 3
-//Ultrasound
-#define US_TRIG 4
-#define US_ECHO 5
+
+
 
 #define min(a,b) (((a)>(b))?(b):(a))
 
@@ -54,14 +54,19 @@ static void motor_speed_manage_blocking(void);
 static void he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,int32_t curr_time);
 static void manage_pwm(float curr_speed,uint8_t user_throttle,float *effective_throttle,uint32_t *last_pwm_change,uint32_t curr_time,uint slice_num,uint channel);
 static void stepper_motor_blocking(float radians,bool clockwise);
-static float ultrasound_distance(); 
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new);
 #include "ble.h" //Contains ble_setup and the function which calls update_throttle
 
 void core1_main(){
-    sleep_ms(2000);
-    printf("\nStarting stepper motor");
-    stepper_motor_blocking(M_PI,true);
+    float distance;
+    while(1){
+        sleep_ms(3000);
+        printf("\nDistance: %f",distance);
+        ultrasound_trig(&distance);
+    }
+    
+    //printf("\nStarting stepper motor");
+    //stepper_motor_blocking(M_PI,true);
 }
 
 int main(){
@@ -350,24 +355,3 @@ static void stepper_motor_blocking(float radians,bool clockwise){
     gpio_put(SM_IN3,0);   
 }
 
-static float ultrasound_distance(){ //Blocking - but not for too long
-    int speed_of_sound = 343; //ms^-1
-    uint32_t trig_time = time_us_32();
-    gpio_put(US_TRIG,1);
-    sleep_us(10);
-    gpio_put(US_TRIG,0);
-    uint32_t curr_time = time_us_32();
-    int echo_read = gpio_get(US_ECHO);
-    //TODO - the sensor does not work like this, it sets the echo high until the actual echo is received.
-    while(!echo_read){
-        echo_read = gpio_get(US_ECHO);
-        curr_time = time_us_32();
-        if(curr_time-trig_time>1000000){ //>100ms and there is a problem
-            return -1;
-        }
-    }
-    float time_diff_seconds = (float)(curr_time - trig_time)/1000000; //float can do 7 decimal digits, 1 mm away is 5.88*10^-6 seconds
-    return 2*speed_of_sound*time_diff_seconds; //Assuming a straight line
-
-
-}
