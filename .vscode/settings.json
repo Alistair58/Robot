@@ -37,6 +37,9 @@
     "raspberry-pi-pico.cmakePath": "${HOME}/.pico-sdk/cmake/v3.31.5/bin/cmake",
     "raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.12.1/ninja",
     "files.associations": {
-        "random": "c"
+        "random": "c",
+        "adc.h": "c",
+        "stepper_motor.h": "c",
+        "driving_motors.h": "c"
     }
 }

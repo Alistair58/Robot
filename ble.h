@@ -3,9 +3,9 @@
 
 #define APP_AD_FLAGS 0x06 //The flag 0x06 indicates: LE General Discoverable Mode and BR/EDR ncot supported.
 #define MOTOR_CONTROL_PACKET 0xA1 //Inidcates the start of a motor control packet
+#define AUTO_MODE_PACKET 0xAA //Indicates a automatic mode packet
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_context_callback_registration_t context_registration;
-static int connected = 0;
 const uint8_t adv_data[] = { //Advertising data
     // Flags general discoverable
     0x02, BLUETOOTH_DATA_TYPE_FLAGS, APP_AD_FLAGS,
@@ -55,11 +55,12 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
     
     if (packet_type != HCI_EVENT_PACKET) return;
     uint8_t hci_event = hci_event_packet_get_type(packet);
-    //printf("\nhci_event: %d",hci_event);
     switch (hci_event) {
         case HCI_EVENT_DISCONNECTION_COMPLETE:
             printf("\nDisconnection complete");
             connected = 0;
+            auto_mode = false;
+            reset_stepper();
             break;
         case HCI_EVENT_LE_META:
             switch(hci_event_le_meta_get_subevent_code(packet)){
@@ -89,6 +90,14 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
             if(buffer[0]==MOTOR_CONTROL_PACKET){
                 //printf("\nIncoming motor control packet");
                 update_throttle(buffer[1],buffer[2]);
+            }
+            break;
+        case ATT_CHARACTERISTIC_94f493cc_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
+            //0xaa is the doubleCheck first packet (AUTO_MODE_PACKET)
+            printf("\nAuto mode packet");
+            if(buffer[0]==AUTO_MODE_PACKET){
+                printf("\nIncoming auto mode packet");
+                set_auto_mode(buffer[1]);
             }
             break;
         default:
