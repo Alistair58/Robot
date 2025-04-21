@@ -8,20 +8,20 @@
 #include "hardware/adc.h"
 
 #define min(a,b) (((a)>(b))?(b):(a))
+#define fcmp(a,b) ((a)+0.000001f>(b) && (a)-0.000001f<(b))
 #include "controller_ble.h" //The gatt file compiled by cmake
 #include "ultrasound.h"
 int connected = 0;
-#include "driving_motors.h" //checks connected
-#include "stepper_motor.h" //checks connected
 bool auto_mode = false;
+#include "driving_motors.h" //checks connected
+#include "stepper_motor.h" //checks connected and auto_mode
+
 
 static void gpio_pins_init(void);
 void core1_main(void);
 void set_auto_mode(uint8_t value);
 
 #include "ble.h" //Calls update_throttle from driving_motors.h and set_auto_mode
-
-
 
 int main(){
     stdio_init_all();
@@ -43,13 +43,15 @@ void core1_main(void){ //auto mode
     int direction = 0;
     while(1){
         if(!auto_mode) return;
-        stepper_motor_blocking(M_PI*0.5f,direction,false);
-        ultrasound_trig(&distance);
-        printf("\nDistance: %f",distance);
-        sleep_ms(1000);
-        stepper_motor_blocking(M_PI*0.5f,!direction,false);
-        direction ^= 1;
-        sleep_ms(2000);
+        turn_robot(M_PI*2,true);
+        sleep_ms(10000);
+        // stepper_motor_blocking(M_PI*0.5f,direction,false);
+        // ultrasound_trig(&distance);
+        // printf("\nDistance: %f",distance);
+        // sleep_ms(1000);
+        // stepper_motor_blocking(M_PI*0.5f,!direction,false);
+        // direction ^= 1;
+        // sleep_ms(2000);
     }
 
 }
@@ -63,9 +65,12 @@ static void gpio_pins_init(){
 void set_auto_mode(uint8_t value){
     if(value==0){
         auto_mode = false;
+        update_throttle(50,50); //TODO - gentle deceleration?
+        reset_stepper();
     }
     else if(value==1 && !auto_mode){
         auto_mode = true;
+        update_throttle(50,50);
         multicore_reset_core1();
         multicore_launch_core1(core1_main);
     }

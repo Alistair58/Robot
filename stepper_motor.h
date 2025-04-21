@@ -12,6 +12,7 @@ static float current_stepper_rotation = 0;
 void stepper_motor_init(void);
 void stepper_motor_blocking(float radians,bool clockwise,bool reset);
 void reset_stepper(void);
+bool put_stepper(int a,int b,int c,int d,uint64_t usDelay,bool reset);
 
 
 void stepper_motor_init(void){
@@ -27,6 +28,7 @@ void stepper_motor_init(void){
 }
 
 void stepper_motor_blocking(float radians,bool clockwise,bool reset){
+    printf("\nStepper_motor_blocking: %f %d %d",radians,clockwise?1:0,reset?1:0);
     if(radians>((float)M_PI+0.05f)){
         printf("\nAngle is too large for stepper motor - it will break the wires");
         return;
@@ -42,106 +44,53 @@ void stepper_motor_blocking(float radians,bool clockwise,bool reset){
         while (radians_travelled<radians) {
             //Sequence taken from: https://wiki.seeedstudio.com/Gear_Stepper_Motor_Driver_Pack/
             //A is IN2, B is IN1, C is IN4, D is IN3
-            if(!connected && !reset) return;
-            gpio_put(SM_IN2,0);//A
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,1);
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,0);
-            gpio_put(SM_IN1,0);//AB
-            gpio_put(SM_IN4,1);
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,0);//B
-            gpio_put(SM_IN4,1);
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,0);
-            gpio_put(SM_IN4,0);//BC
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,0);//C
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,0);//CD
-            gpio_put(SM_IN3,0);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,1);//D
-            gpio_put(SM_IN3,0);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,0);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,1);//DA
-            gpio_put(SM_IN3,0);
-            sleep_us(usDelay);
+            for(int i=0;i<8;i++){
+                if(!put_stepper(
+                    (i<2 || i>6)?0:1,
+                    (i>0 && i<4)?0:1,
+                    (i>2 && i<6)?0:1,
+                    (i>4)?0:1,
+                usDelay,reset)) return;
+            }
             radians_travelled+=radians_per_cycle;
             current_stepper_rotation-=radians_per_cycle;
         }
     }
     else{
         while (radians_travelled<radians) {
-            if(!connected && !reset) return;
             //Reversed sequence
-            gpio_put(SM_IN2,0);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,1);//DA
-            gpio_put(SM_IN3,0);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,1);//D
-            gpio_put(SM_IN3,0);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,0);//CD
-            gpio_put(SM_IN3,0);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,0);//C
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,0);
-            gpio_put(SM_IN4,0);//BC
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,1);
-            gpio_put(SM_IN1,0);//B
-            gpio_put(SM_IN4,1);
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,0);
-            gpio_put(SM_IN1,0);//AB
-            gpio_put(SM_IN4,1);
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
-            gpio_put(SM_IN2,0);//A
-            gpio_put(SM_IN1,1);
-            gpio_put(SM_IN4,1);
-            gpio_put(SM_IN3,1);
-            sleep_us(usDelay);
+            for(int i=7;i>=0;i--){
+                if(!put_stepper(
+                    (i<2 || i>6)?0:1,
+                    (i>0 && i<4)?0:1,
+                    (i>2 && i<6)?0:1,
+                    (i>4)?0:1,
+                usDelay,reset)) return;
+            }
             radians_travelled+=radians_per_cycle;
             current_stepper_rotation+=radians_per_cycle;
         }
     }
-    gpio_put(SM_IN2,0);
-    gpio_put(SM_IN1,0);
-    gpio_put(SM_IN4,0);
-    gpio_put(SM_IN3,0);   
+    printf("\nEnded stepper_motor_blocking");
+    put_stepper(0,0,0,0,0,reset); 
+}
+
+bool put_stepper(int a,int b,int c,int d,uint64_t usDelay,bool reset){
+    if((!auto_mode || !connected) && !reset){
+        printf("\nPaused stepper");
+        return false;
+    }
+    gpio_put(SM_IN2,a);
+    gpio_put(SM_IN1,b);
+    gpio_put(SM_IN4,c);
+    gpio_put(SM_IN3,d);
+    sleep_us(usDelay);
+    return true;
 }
 
 void reset_stepper(void){
-    stepper_motor_blocking(abs(current_stepper_rotation),current_stepper_rotation<0,true);
+    sleep_ms(10);//Wait for the current rotation to stop
+    printf("\nResetting stepper by: %f",current_stepper_rotation);
+    stepper_motor_blocking(fabs(current_stepper_rotation),current_stepper_rotation<0,true);
     //if it is currently positive, we are currently clockwise and need to rotate anti-clockwise and so clockwise is false
 }
