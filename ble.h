@@ -18,6 +18,7 @@ const uint8_t adv_data_len = sizeof(adv_data);
 void ble_setup();
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 static int att_write_callback(hci_con_handle_t con_handle, uint16_t att_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size);
+bool throttle_change_ready = true;
 
 void ble_setup(){
     l2cap_init();
@@ -87,9 +88,10 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
             //Characteristic packets are in the form: doubleCheck leftThrottle rightThrottle
             //0xa1 is the doubleCheck first packet (MOTOR_CONTROL_PACKET)
-            if(buffer[0]==MOTOR_CONTROL_PACKET){
+            if(buffer[0]==MOTOR_CONTROL_PACKET && throttle_change_ready){
                 //printf("\nIncoming motor control packet");
-                update_throttle(buffer[1],buffer[2]);
+                throttle_change_ready = false;
+                _update_throttle_smooth(buffer[1],buffer[2],&throttle_change_ready);
             }
             break;
         case ATT_CHARACTERISTIC_94f493cc_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
@@ -105,3 +107,5 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     }
     return 0;
 }
+
+

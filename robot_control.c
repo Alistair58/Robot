@@ -23,6 +23,7 @@ void set_auto_mode(uint8_t value);
 
 #include "ble.h" //Calls update_throttle from driving_motors.h and set_auto_mode
 
+
 int main(){
     stdio_init_all();
     // Initialise the Wi-Fi, Bluetooth and LED chip
@@ -43,7 +44,7 @@ void core1_main(void){ //auto mode
     int direction = 0;
     while(1){
         if(!auto_mode) return;
-        turn_robot(M_PI*2,true);
+        turn_robot(M_PI/2,true);
         sleep_ms(10000);
         // stepper_motor_blocking(M_PI*0.5f,direction,false);
         // ultrasound_trig(&distance);
@@ -65,7 +66,7 @@ static void gpio_pins_init(){
 void set_auto_mode(uint8_t value){
     if(value==0){
         auto_mode = false;
-        update_throttle(50,50); //TODO - gentle deceleration?
+        update_throttle(50,50);
         reset_stepper();
     }
     else if(value==1 && !auto_mode){

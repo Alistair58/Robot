@@ -26,9 +26,13 @@ uint8_t user_l_throttle = 50;
 uint8_t user_r_throttle = 50;
 float effective_l_throttle = 50;
 float effective_r_throttle = 50;
+uint16_t l_spoke_count = 0;
+uint16_t r_spoke_count = 0;
 
 void driving_motors_init(void);
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new);
+void update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new);
+void _update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new,bool *done);
 void motor_speed_manage_blocking(void);
 static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,int32_t curr_time);
 static void manage_pwm(float curr_speed,uint8_t user_throttle,float *effective_throttle,uint32_t *last_pwm_change,uint32_t curr_time,uint slice_num,uint channel);
@@ -71,7 +75,6 @@ void driving_motors_init(void){
     adc_gpio_init(HE_R_ADC_GPIO);
 }
 
-
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Called by att_write_callback in ble.h
     //0<= throttle <=100
     if(user_l_throttle!=left_throttle_new || user_r_throttle!=right_throttle_new) printf("\nL: %d R: %d",left_throttle_new,right_throttle_new);
@@ -98,6 +101,80 @@ void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Ca
     pwm_set_enabled(r_slice_num, true);
 }
 
+void update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Called by att_write_callback in ble.h
+    //0<= throttle <=100
+    //Updates the throttle smoothly (if the new throttle is not 50)
+    printf("\nL: %d R: %d",left_throttle_new,right_throttle_new);
+    uint16_t smooth_update_interval = 20; //20ms
+    //50 -> 100 = 20*(50/2) = 500ms which I think is nice
+    uint8_t max_update = 2; //
+    //Set direction pins
+    gpio_put(DM_L_FORWARDS,(left_throttle_new<50)?0:1);
+    gpio_put(DM_L_BACKWARDS,(left_throttle_new<50)?1:0);
+    gpio_put(DM_R_FORWARDS,(right_throttle_new<50)?0:1);
+    gpio_put(DM_R_BACKWARDS,(right_throttle_new<50)?1:0);
+
+    
+
+    int l_throttle_change = (int)left_throttle_new-user_l_throttle;
+    int r_throttle_change = (int)right_throttle_new-user_r_throttle;
+    if(left_throttle_new==50){
+        effective_l_throttle = 50;
+        pwm_set_chan_level(l_slice_num, l_channel, 0);
+        pwm_set_enabled(l_slice_num, true);
+        user_l_throttle = 50;
+        l_throttle_change = 0; //instant braking
+    }
+    if(right_throttle_new == 50){
+        effective_r_throttle = 50;
+        pwm_set_chan_level(r_slice_num, r_channel, 0);
+        pwm_set_enabled(r_slice_num, true);
+        user_r_throttle = 50;
+        r_throttle_change = 0;
+    }
+    while(!(l_throttle_change==0 && r_throttle_change==0)){ 
+        if(l_throttle_change!=0){
+            if(abs(l_throttle_change)<max_update){
+                user_l_throttle+= l_throttle_change;
+                l_throttle_change = 0;
+            }
+            else{
+                l_throttle_change += (l_throttle_change<0)?max_update:-max_update;
+                user_l_throttle+=(l_throttle_change<0)?-max_update:max_update;
+            }
+        }
+        if(r_throttle_change!=0){
+            if(abs(r_throttle_change)<max_update){
+                user_r_throttle+=r_throttle_change;
+                r_throttle_change = 0;
+            }
+            else{
+                r_throttle_change += (r_throttle_change<0)?max_update:-max_update;
+                user_r_throttle+=(r_throttle_change<0)?-max_update:max_update;
+            }
+        } 
+        printf("\nSmooth update, l_throttle: %d l_throttle_change: %d r_throttle: %d r_throttle_change: %d",user_l_throttle,l_throttle_change,user_r_throttle,r_throttle_change);  
+        //Set the initial pwm duty cycle
+        //This may be changed by the hall effect sensor
+        uint16_t l_duty = (uint16_t) round(((float)(abs(user_l_throttle-50))/50) * 1000);
+        //Abs as we want the values furthest from 50 (0 and 100) to give the fastest outputs
+        uint16_t r_duty = (uint16_t) round(((float)(abs(user_r_throttle-50))/50) * 1000);
+        pwm_set_chan_level(l_slice_num, l_channel, l_duty); //set duty cycle
+        pwm_set_chan_level(r_slice_num, r_channel, r_duty);
+
+        pwm_set_enabled(l_slice_num, true); // Set the PWM running
+        pwm_set_enabled(r_slice_num, true);
+
+        sleep_ms(smooth_update_interval);
+    }
+}
+
+void _update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new,bool *done){
+    update_throttle_smooth(left_throttle_new,right_throttle_new);
+    *done = true;
+}
+
+
 void motor_speed_manage_blocking(void){
     //currently recording the time between 2 spokes
     //therefore, can't tell the direction
@@ -115,8 +192,8 @@ void motor_speed_manage_blocking(void){
             user_r_throttle = 50;
         }
         curr_time = time_us_32();
-        he_update_speed(HE_L_ADC,&l_high,&last_l_high,curr_time);
-        he_update_speed(HE_R_ADC,&r_high,&last_r_high,curr_time);
+        if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,curr_time)) l_spoke_count = (uint16_t)((uint32_t)l_spoke_count+1) & 0xffff;
+        if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,curr_time)) r_spoke_count = (uint16_t)((uint32_t)r_spoke_count+1) & 0xffff;
         manage_pwm(curr_l_speed,user_l_throttle,&effective_l_throttle,&last_l_pwm_update,curr_time,l_slice_num,l_channel);
         manage_pwm(curr_r_speed,user_r_throttle,&effective_r_throttle,&last_r_pwm_update,curr_time,r_slice_num,r_channel);
         sleep_ms(update_interval);
@@ -125,7 +202,7 @@ void motor_speed_manage_blocking(void){
 
 static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,int32_t curr_time){
     //returns true if a spoke has been seen
-    const int max_spoke_wait = 2000000;
+    const int max_spoke_wait = 2000000; //2s
     //left sensor:
     //1.62v is about normal
     //>1.9v when right in front of a magnet
@@ -173,7 +250,7 @@ static void manage_pwm(float curr_speed,uint8_t user_throttle,float *effective_t
     if(desired_speed>curr_speed){
         float proposed_change = (((forwards)?1:-1)*min((desired_speed-curr_speed)/20,1));
         *effective_throttle += proposed_change;
-        
+        if(user_throttle==user_r_throttle) printf("\nCurr speed: %f desired: %f effective throttle: %f proposed change: %f",curr_speed,desired_speed,*effective_throttle,proposed_change);   
     }
     else if(desired_speed<curr_speed){
         float proposed_change = (((forwards)?-1:1)*min((curr_speed-desired_speed)/20,1));
@@ -195,39 +272,35 @@ void turn_robot(float radians, bool clockwise){
     //I think that the distance needed for a turn will vary based on friction
     //and hence the constants will be empirical
 
-    const float spokes_in_full_rotation = 50;
+    const float spokes_in_full_rotation = 200;
     float target_spokes = floor(spokes_in_full_rotation*(radians/(2*M_PI)));
-    update_throttle((clockwise)?80:20,(clockwise)?20:80);
-    int l_spoke_count = 0;
-    int r_spoke_count = 0;
-    bool r_high = false;
-    bool l_high = false;
-    uint32_t last_r_high = 0; //it starts counting when we hit a spoke
-    uint32_t last_l_high = 0;
+    
+    uint16_t l_start_spoke_count = l_spoke_count;
+    uint16_t r_start_spoke_count = r_spoke_count;
+    int32_t l_s_count = 0;
+    int32_t r_s_count = 0;
     uint32_t curr_time = time_us_32();
-    uint32_t last_l_pwm_update = curr_time;
-    uint32_t last_r_pwm_update = curr_time;
     const int update_interval = 10; //10ms
 
-    printf("\nTarget spokes: %f L spokes: %d, R spokes: %d",target_spokes,l_spoke_count,r_spoke_count);
     //TODO 
     //add stuck BLE 
+    update_throttle_smooth((clockwise)?80:20,(clockwise)?20:80);
     while (1) {
-        curr_time = time_us_32();
-        if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,curr_time)) l_spoke_count++;
-        if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,curr_time)) r_spoke_count++;
-        if(((int)target_spokes) <= l_spoke_count && ((int)target_spokes) <= r_spoke_count){
+        l_s_count = (int32_t)l_spoke_count - (int32_t)l_start_spoke_count;
+        if(l_s_count<0) l_s_count+= 0xffff;
+        r_s_count = (int32_t)r_spoke_count - (int32_t)r_start_spoke_count;
+        if(r_s_count<0) r_s_count+= 0xffff;
+        
+        if(((int32_t)target_spokes) <= l_s_count && ((int32_t)target_spokes) <= r_s_count){
             update_throttle(50,50);
             return;
         }
-        else if(((int)target_spokes) == l_spoke_count){
-            update_throttle(50,(clockwise)?20:80);
+        else if(((int32_t)target_spokes) == l_s_count){
+            update_throttle_smooth(50,(clockwise)?20:80);
         }
-        else if(((int)target_spokes) == r_spoke_count){
-            update_throttle((clockwise)?80:20,50);
+        else if(((int32_t)target_spokes) == r_s_count){
+            update_throttle_smooth((clockwise)?80:20,50);
         }
-        manage_pwm(curr_l_speed,user_l_throttle,&effective_l_throttle,&last_l_pwm_update,curr_time,l_slice_num,l_channel);
-        manage_pwm(curr_r_speed,user_r_throttle,&effective_r_throttle,&last_r_pwm_update,curr_time,r_slice_num,r_channel);
         sleep_ms(update_interval);
     }
 
