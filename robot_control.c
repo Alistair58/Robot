@@ -22,6 +22,9 @@ void core1_main(void);
 void set_auto_mode(uint8_t value);
 
 #include "ble.h" //Calls update_throttle from driving_motors.h and set_auto_mode
+//TODO
+//See if it's going to be able to turn consistently
+
 
 
 int main(){
@@ -70,6 +73,7 @@ void set_auto_mode(uint8_t value){
         reset_stepper();
     }
     else if(value==1 && !auto_mode){
+        stop = false; //Otherwise the robot won't be able to move
         auto_mode = true;
         update_throttle(50,50);
         multicore_reset_core1();
