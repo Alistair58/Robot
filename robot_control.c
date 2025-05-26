@@ -23,8 +23,7 @@ void set_auto_mode(uint8_t value);
 
 #include "ble.h" //Calls update_throttle from driving_motors.h and set_auto_mode
 //TODO
-//See if it's going to be able to turn consistently
-
+//Recalibrate hall effect sensors for new wheel
 
 
 int main(){
@@ -67,7 +66,7 @@ static void gpio_pins_init(){
 }
 
 void set_auto_mode(uint8_t value){
-    if(value==0){
+    if(value==0 && auto_mode){
         auto_mode = false;
         update_throttle(50,50);
         reset_stepper();

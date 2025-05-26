@@ -1,11 +1,11 @@
 //Facing the direction of the robot
 //Driving motors
 #define DM_L_PWM 21
-#define DM_L_FORWARDS 20
-#define DM_L_BACKWARDS 19
+#define DM_L_BACKWARDS 20
+#define DM_L_FORWARDS 19
 #define DM_R_PWM 16
-#define DM_R_FORWARDS 17
-#define DM_R_BACKWARDS 18
+#define DM_R_BACKWARDS 17
+#define DM_R_FORWARDS 18
 uint l_slice_num; //Initialised in gpio_pins_init
 uint l_channel;
 uint r_slice_num;
@@ -21,7 +21,7 @@ uint r_channel;
 
 static float curr_l_speed = 0;
 static float curr_r_speed = 0;
-static float max_speed = 20; //when spinning in the air, it reaches 20 rads^-1
+static float max_speed = 3.5f; //when spinning in the air, it reaches 3.5 rads^-1
 uint8_t user_l_throttle = 50;
 uint8_t user_r_throttle = 50;
 float effective_l_throttle = 50;
@@ -36,7 +36,7 @@ void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new);
 void update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new);
 void _update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new,bool *done);
 void motor_speed_manage_blocking(void);
-static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,int32_t curr_time);
+static bool he_update_speed(int ADC_PIN,bool *high,uint32_t *last_high,float *speed,int32_t curr_time);
 static void manage_pwm(float curr_speed,uint8_t user_throttle,float *effective_throttle,uint32_t *last_pwm_change,uint32_t curr_time,uint slice_num,uint channel);
 void turn_robot(float radians, bool clockwise);
 
@@ -105,7 +105,7 @@ void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Ca
     pwm_set_enabled(r_slice_num, true);
 }
 
-void update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Called by att_write_callback in ble.h
+void update_throttle_smooth(uint8_t left_throttle_new,uint8_t right_throttle_new){
     //0<= throttle <=100
     //Updates the throttle smoothly (if the new throttle is not 50)
     printf("\nL: %d R: %d",left_throttle_new,right_throttle_new);
@@ -209,8 +209,8 @@ void motor_speed_manage_blocking(void){
         }
         if(!smoothing && !stop){
             curr_time = time_us_32();
-            if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,curr_time)) l_spoke_count = (uint16_t)((uint32_t)l_spoke_count+1) & 0xffff;
-            if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,curr_time)) r_spoke_count = (uint16_t)((uint32_t)r_spoke_count+1) & 0xffff;
+            if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,&curr_l_speed,curr_time)) l_spoke_count = (uint16_t)((uint32_t)l_spoke_count+1) & 0xffff;
+            if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,&curr_r_speed,curr_time)) r_spoke_count = (uint16_t)((uint32_t)r_spoke_count+1) & 0xffff;
             manage_pwm(curr_l_speed,user_l_throttle,&effective_l_throttle,&last_l_pwm_update,curr_time,l_slice_num,l_channel);
             manage_pwm(curr_r_speed,user_r_throttle,&effective_r_throttle,&last_r_pwm_update,curr_time,r_slice_num,r_channel);
         }
@@ -219,17 +219,13 @@ void motor_speed_manage_blocking(void){
     }
 }
 
-static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,int32_t curr_time){
+static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *speed,int32_t curr_time){
     //returns true if a spoke has been seen
     const int max_spoke_wait = 2000000; //2s
-    //left sensor:
-    //1.62v is about normal
-    //>1.9v when right in front of a magnet
-    //all 5 magnets behave similarly
-
-    //right sensor:
-    //1.52v is about normal
-    //>1.75v when magnet
+    //Sensors:
+    //1.6v is about normal
+    //>1.8v when right in front of a magnet
+    //When the larger, flatter side is facing the pole the voltage is largest
     const float high_voltage = 1.75; //gap so it is more stable
     const float low_voltage = 1.65;
     // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
@@ -239,40 +235,44 @@ static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,int32_t 
     adc_select_input(ADC_PIN);
     uint16_t raw_adc = adc_read();
     float voltage = raw_adc*conversion_factor;
-        if(*high && voltage<low_voltage){
-            *high = false;
-        }
-        else if(!*high && voltage>high_voltage){
-            *high = true;
-            if(*last_high){
-                curr_r_speed = spoke_angle/((float)(curr_time-*last_high)/1000000); //convert to seconds from micro
-                *last_high = curr_time;
-                return true;
-            }
+    //TODO remove
+    if(*high && voltage<low_voltage){
+        *high = false;
+    }
+    else if(!*high && voltage>high_voltage){
+        *high = true;
+        if(*last_high){
+            *speed = spoke_angle/((float)(curr_time-*last_high)/1000000); //convert to seconds from micro
+            printf("\nSpeed: %f",*speed);
             *last_high = curr_time;
+            return true;
         }
-        else if(curr_time-*last_high>max_spoke_wait){ //either very slow or not moving
-            curr_r_speed = 0;
-            //reset
-            *last_high = 0; //this will be fixed when we hit the next spoke (also works if we are on a spoke)
-            *high = false; 
-        }
-        return false;
+        *last_high = curr_time;
+    }
+    else if(curr_time-*last_high>max_spoke_wait){ //either very slow or not moving
+        *speed = 0;
+        //reset
+        *last_high = 0; //this will be fixed when we hit the next spoke (also works if we are on a spoke)
+        *high = false; 
+    }
+    return false;
 }
 
 
 
 static void manage_pwm(float curr_speed,uint8_t user_throttle,float *effective_throttle,uint32_t *last_pwm_change,uint32_t curr_time,uint slice_num,uint channel){
+    int max_change = 3;
+    int change_scale_down = 2;
     float desired_speed = max_speed*((float)(abs(user_throttle-50))/50);
     bool forwards = user_throttle>50;
     if(user_throttle==50) return;
     if(desired_speed>curr_speed){
-        float proposed_change = (((forwards)?1:-1)*min((desired_speed-curr_speed)/20,1));
+        float proposed_change = (((forwards)?1:-1)*min((desired_speed-curr_speed)/change_scale_down,max_change));
         *effective_throttle += proposed_change;
         if(user_throttle==user_r_throttle) printf("\nCurr speed: %f desired: %f effective throttle: %f proposed change: %f",curr_speed,desired_speed,*effective_throttle,proposed_change);   
     }
     else if(desired_speed<curr_speed){
-        float proposed_change = (((forwards)?-1:1)*min((curr_speed-desired_speed)/20,1));
+        float proposed_change = (((forwards)?-1:1)*min((curr_speed-desired_speed)/change_scale_down,max_change));
         *effective_throttle += proposed_change;
     }
     if(*effective_throttle>100) *effective_throttle = 100;
@@ -288,10 +288,9 @@ static void manage_pwm(float curr_speed,uint8_t user_throttle,float *effective_t
 void turn_robot(float radians, bool clockwise){
     //set one motor one direction and the other the other way
     //count the number of spokes seen, want same number for both wheels
-    //I think that the distance needed for a turn will vary based on friction
-    //and hence the constants will be empirical
+    //Constants will be empirical
 
-    const float spokes_in_full_rotation = 200;
+    const float spokes_in_full_rotation = 100;
     float target_spokes = floor(spokes_in_full_rotation*(radians/(2*M_PI)));
     
     uint16_t l_start_spoke_count = l_spoke_count;
