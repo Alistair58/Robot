@@ -40,6 +40,8 @@
         "random": "c",
         "adc.h": "c",
         "stepper_motor.h": "c",
-        "driving_motors.h": "c"
+        "driving_motors.h": "c",
+        "compare": "c",
+        "cstdint": "c"
     }
 }

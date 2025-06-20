@@ -15,15 +15,15 @@ int connected = 0;
 bool auto_mode = false;
 #include "driving_motors.h" //checks connected
 #include "stepper_motor.h" //checks connected and auto_mode
-
-
 static void gpio_pins_init(void);
 void core1_main(void);
 void set_auto_mode(uint8_t value);
-
 #include "ble.h" //Calls update_throttle from driving_motors.h and set_auto_mode
+
 //TODO
-//Recalibrate hall effect sensors for new wheel
+//Fit PID constants to the robot
+//Test 
+//Make the robot turn reliably
 
 
 int main(){
