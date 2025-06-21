@@ -21,8 +21,8 @@ void set_auto_mode(uint8_t value);
 #include "ble.h" //Calls update_throttle from driving_motors.h and set_auto_mode
 
 //TODO
-//Fit PID constants to the robot
-//Test 
+//Make notes
+//Look into delayed output variable PID
 //Make the robot turn reliably
 
 

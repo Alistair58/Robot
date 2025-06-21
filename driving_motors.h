@@ -32,9 +32,15 @@ static float r_duty = 0;
 bool smoothing = false;
 bool stop = false;
 //PID constants
-static const float p_weight = 1;
-static const float i_weight = 1;
-static const float d_weight = 1;
+//Proportion is good for making it change direction quickly 
+//but as the speed updates causes massive changes
+//Integral is good for maintaining the current speed and produces stable behaviour
+//but if it is too high, it will be very slow to respond
+//Derivative suffers from the drawback of proportion and so has a very low relative weight 
+
+static const float p_weight = 90;
+static const float i_weight = 1e-4;
+static const float d_weight = 5e4;
 
 void driving_motors_init(void);
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new);
@@ -122,7 +128,7 @@ void motor_speed_manage_blocking(void){
 
 static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *speed,int32_t curr_time){
     //returns true if a spoke has been seen
-    const int max_spoke_wait = 3000000; //3s
+    const int max_spoke_wait = 1500000; //1.5s 2Pi/5/1.5 = 0.8378 rads^-1 is the smallest speed measurable
     //Sensors
     //1.6v is about normal
     //>1.8v when right in front of a magnet
@@ -162,25 +168,31 @@ static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *s
 
 static float manage_pwm(float curr_speed,uint8_t user_throttle,float *duty,uint32_t *last_pwm_change,uint32_t curr_time,uint slice_num,uint channel,uint8_t gpio_forwards,uint8_t gpio_backwards,float *integral,float last_error){
     //Sets the duty cycle using PID such that the output speed is as the throttle desires
-    float desired_speed = max_speed*((float)(abs(user_throttle-50))/50);
+    float desired_speed = max_speed*((float)((user_throttle-50))/50);
+    if(*duty<0) curr_speed*=-1; //The hall effect doesn't know the direction but pwm does
     float error = desired_speed-curr_speed;
 
-    int dt = ((float)(curr_time-(*last_pwm_change)))/1e6; //in seconds
+    int dt = ((float)(curr_time-(*last_pwm_change))); //In microseconds
     //Proportion
     float proportion = error;
     //Integral
     *integral += error*dt;
     //Derivative
     float derivative = (error-last_error)/dt;
-
+    if(abs(i_weight*(*integral))>1000) *integral = ((*integral>0)?1:-1)*1000;
+    //Reset the integral in scenarios where the speed can't be reached e.g. it can't get to 3.5rads^-1
+    if(*integral>0!=desired_speed>0) *integral = 0;
+    //If we're changing direction, a large integral in the other direction doesn't help
     *duty = p_weight*proportion + i_weight*(*integral) + d_weight*derivative;
-    printf("Duty %f",*duty);
+    if(*duty>1000) *duty = 1000;
+    if(*duty<-1000) *duty = -1000;
+    printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",user_throttle,desired_speed,curr_speed,error,p_weight*proportion,i_weight*(*integral),d_weight*derivative,*duty);
     //Set direction pins
-    //gpio_put(gpio_forwards,(*duty>0)?1:0);
-    //gpio_put(gpio_backwards,(*duty>0)?0:1);
+    gpio_put(gpio_forwards,(*duty>0)?1:0);
+    gpio_put(gpio_backwards,(*duty>0)?0:1);
     
     pwm_set_chan_level(slice_num, channel, abs((int)*duty)); //set duty cycle
-    //pwm_set_enabled(slice_num, true); // Set the PWM running
+    pwm_set_enabled(slice_num, true); // Set the PWM running
     *last_pwm_change = curr_time;
 }
 
@@ -216,10 +228,10 @@ void turn_robot(float radians, bool clockwise){
                 return;
             }
             else if(((int32_t)target_spokes) == l_s_count){
-                update_throttle_smooth(50,(clockwise)?backwards_throttle:forwards_throttle);
+                update_throttle(50,(clockwise)?backwards_throttle:forwards_throttle);
             }
             else if(((int32_t)target_spokes) == r_s_count){
-                update_throttle_smooth((clockwise)?forwards_throttle:backwards_throttle,50);
+                update_throttle((clockwise)?forwards_throttle:backwards_throttle,50);
             }
             sleep_ms(update_interval);
         }
