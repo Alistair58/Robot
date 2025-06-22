@@ -105,6 +105,8 @@ void motor_speed_manage_blocking(void){
     uint32_t last_l_pwm_update = curr_time;
     uint32_t last_r_pwm_update = curr_time;
     const int update_interval = 10; //10ms
+    int counter = 0;
+    const int pwm_update_ratio = 10; //higher = less updates
     float l_integral = 0;
     float r_integral = 0;
     float last_l_error = 0;
@@ -118,8 +120,9 @@ void motor_speed_manage_blocking(void){
             curr_time = time_us_32();
             if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,&curr_l_speed,curr_time)) l_spoke_count = (uint16_t)((uint32_t)l_spoke_count+1) & 0xffff;
             if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,&curr_r_speed,curr_time)) r_spoke_count = (uint16_t)((uint32_t)r_spoke_count+1) & 0xffff;
-            last_l_error = manage_pwm(curr_l_speed,user_l_throttle,&l_duty,&last_l_pwm_update,curr_time,l_slice_num,l_channel,DM_L_FORWARDS,DM_L_BACKWARDS,&l_integral,last_l_error);
-            last_r_error = manage_pwm(curr_r_speed,user_r_throttle,&r_duty,&last_r_pwm_update,curr_time,r_slice_num,r_channel,DM_R_FORWARDS,DM_R_BACKWARDS,&r_integral,last_r_error);
+            if(counter==0) last_l_error = manage_pwm(curr_l_speed,user_l_throttle,&l_duty,&last_l_pwm_update,curr_time,l_slice_num,l_channel,DM_L_FORWARDS,DM_L_BACKWARDS,&l_integral,last_l_error);
+            if(counter==0) last_r_error = manage_pwm(curr_r_speed,user_r_throttle,&r_duty,&last_r_pwm_update,curr_time,r_slice_num,r_channel,DM_R_FORWARDS,DM_R_BACKWARDS,&r_integral,last_r_error);
+            counter = (counter+1)%pwm_update_ratio;
         }
         
         sleep_ms(update_interval);
@@ -179,10 +182,13 @@ static float manage_pwm(float curr_speed,uint8_t user_throttle,float *duty,uint3
     *integral += error*dt;
     //Derivative
     float derivative = (error-last_error)/dt;
-    if(abs(i_weight*(*integral))>1000) *integral = ((*integral>0)?1:-1)*1000;
+    //Anti-windup
+    if(abs(i_weight*(*integral))>1000) *integral = ((*integral>0)?1:-1)*1000/i_weight;
     //Reset the integral in scenarios where the speed can't be reached e.g. it can't get to 3.5rads^-1
     if(*integral>0!=desired_speed>0) *integral = 0;
     //If we're changing direction, a large integral in the other direction doesn't help
+    if(user_throttle==50) *integral = 0;
+    //Sometimes get stuck at 300 duty for example and this can cause movement so slow that hall effect will count speed as 0 
     *duty = p_weight*proportion + i_weight*(*integral) + d_weight*derivative;
     if(*duty>1000) *duty = 1000;
     if(*duty<-1000) *duty = -1000;
@@ -202,7 +208,8 @@ void turn_robot(float radians, bool clockwise){
     //count the number of spokes seen, want same number for both wheels
     //Constants will be empirical
 
-    const float spokes_in_full_rotation = 100; //Check?
+    const float spokes_in_full_rotation =  11;
+    //For a hard surface (tested on the chair mat) with the plastic lego wheels
     float target_spokes = floor(spokes_in_full_rotation*(radians/(2*M_PI)));
     
     uint16_t l_start_spoke_count = l_spoke_count;
@@ -211,7 +218,7 @@ void turn_robot(float radians, bool clockwise){
     int32_t r_s_count = 0;
     uint32_t curr_time = time_us_32();
     const int update_interval = 10; //10ms
-    const int forwards_throttle = 100;
+    const int forwards_throttle = 90;
     const int backwards_throttle = 0;
     //TODO 
     //add stuck BLE 

@@ -46,7 +46,7 @@ void core1_main(void){ //auto mode
     int direction = 0;
     while(1){
         if(!auto_mode) return;
-        turn_robot(M_PI/2,true);
+        turn_robot(2*M_PI,true);
         sleep_ms(10000);
         // stepper_motor_blocking(M_PI*0.5f,direction,false);
         // ultrasound_trig(&distance);
@@ -68,6 +68,7 @@ static void gpio_pins_init(){
 void set_auto_mode(uint8_t value){
     if(value==0 && auto_mode){
         auto_mode = false;
+        multicore_reset_core1();
         update_throttle(50,50);
         reset_stepper();
     }
@@ -76,6 +77,7 @@ void set_auto_mode(uint8_t value){
         auto_mode = true;
         update_throttle(50,50);
         multicore_reset_core1();
+        sleep_ms(5);
         multicore_launch_core1(core1_main);
     }
 }
