@@ -35,7 +35,7 @@ void set_auto_mode(uint8_t value){
         auto_mode = true;
         update_throttle(50,50);
         multicore_reset_core1();
-        sleep_ms(5); //Seems to make it work more reliably
+        sleep_ms(100); //Seems to make it work more reliably
         multicore_launch_core1(core1_main);
     }
 }

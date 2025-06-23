@@ -9,12 +9,7 @@
 #include "globals.h"
 
 //TODO
-//forwards function
-//options for until it hits something or a fixed distance
-//need to add stuck error message to turning
-//Note that it is impossible to detect a stuck with wheels spinning
-//Add receiver for this in the app
-
+//Fix auto mode not starting reliably
 //Obstacle avoidance code
 //Needs a stack
 

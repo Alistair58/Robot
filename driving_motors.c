@@ -8,6 +8,8 @@
 #include "driving_motors.h"
 #include "stepper_motor.h"
 #include "ultrasound.h"
+#include "ble.h"
+#include "auto_mode.h"
 
 //Vehicle-related
 static float curr_l_speed = 0;
@@ -71,7 +73,7 @@ void driving_motors_init(void){
 
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Called by att_write_callback in ble.h
     //0<= throttle <=100
-    if(user_l_throttle!=left_throttle_new || user_r_throttle!=right_throttle_new) printf("\nL: %d R: %d",left_throttle_new,right_throttle_new);
+    //if(user_l_throttle!=left_throttle_new || user_r_throttle!=right_throttle_new) printf("\nL: %d R: %d",left_throttle_new,right_throttle_new);
     user_l_throttle = left_throttle_new;
     user_r_throttle = right_throttle_new;
 }
@@ -195,8 +197,8 @@ static float manage_pwm(pid_values *pid_vals){
     *(pid_vals->duty) = p_weight*proportion + i_weight*(pid_vals->integral) + d_weight*derivative;
     if(*(pid_vals->duty)>1000) *(pid_vals->duty) = 1000;
     if(*(pid_vals->duty)<-1000) *(pid_vals->duty) = -1000;
-    printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
-        *(pid_vals->user_throttle),desired_speed,curr_speed,error,p_weight*proportion,i_weight*(pid_vals->integral),d_weight*derivative,*(pid_vals->duty));
+    //printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
+    //    *(pid_vals->user_throttle),desired_speed,curr_speed,error,p_weight*proportion,i_weight*(pid_vals->integral),d_weight*derivative,*(pid_vals->duty));
     //Set direction pins
     gpio_put(pid_vals->gpio_forwards,(*(pid_vals->duty)>0)?1:0);
     gpio_put(pid_vals->gpio_backwards,(*(pid_vals->duty)>0)?0:1);
@@ -204,13 +206,15 @@ static float manage_pwm(pid_values *pid_vals){
     pwm_set_chan_level(pid_vals->slice_num, pid_vals->channel, abs((int)*(pid_vals->duty))); //set duty cycle
     pwm_set_enabled(pid_vals->slice_num, true); // Set the PWM running
     pid_vals->last_pwm_update = *(pid_vals->curr_time);
+    //printf("dutyChanged: %d, duty>=1000: %d, time since last duty change: %lu, speed==0: %d",(int)*(pid_vals->duty)!=(int)prev_duty,fabs(*(pid_vals->duty))>=1000,(*(pid_vals->curr_time)-pid_vals->last_duty_change),*(pid_vals->curr_speed)==0);
     if((int)*(pid_vals->duty)!=(int)prev_duty){
         pid_vals->last_duty_change = *(pid_vals->curr_time);
     }
-    else if(fabs(*(pid_vals->duty))>=1000 && (*(pid_vals->curr_time)-pid_vals->last_duty_change)>2e6 && pid_vals->curr_speed==0){
+    else if(fabs(*(pid_vals->duty))>=1000 && (*(pid_vals->curr_time)-pid_vals->last_duty_change)>2e6 && *(pid_vals->curr_speed)==0){
         //If we're giving it the beans and have been for the last 2 seconds and aren't moving
         update_throttle(50,50);
-        //BLE stuck notification
+        send_stuck_notification();
+        set_auto_mode(0);
     }
 }
 
@@ -232,8 +236,6 @@ void turn_robot(float radians, bool clockwise){
     const int update_interval = 10; //10ms
     const int forwards_throttle = 90;
     const int backwards_throttle = 10;
-    //TODO 
-    //add stuck BLE 
     update_throttle((clockwise)?forwards_throttle:backwards_throttle,(clockwise)?backwards_throttle:forwards_throttle);
     while (1) {
         if(auto_mode && connected){

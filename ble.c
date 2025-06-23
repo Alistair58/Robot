@@ -15,6 +15,8 @@ const uint8_t adv_data[] = { //Advertising data
     0x06, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'R','o','b','o','t'
 };
 const uint8_t adv_data_len = sizeof(adv_data);
+hci_con_handle_t con_handle = 0;
+bool notifications_enabled = false;
 
 void ble_setup(){
     l2cap_init();
@@ -56,13 +58,13 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
         case HCI_EVENT_DISCONNECTION_COMPLETE:
             printf("\nDisconnection complete");
             connected = 0;
-            auto_mode = false;
-            reset_stepper();
+            set_auto_mode(0);
             break;
         case HCI_EVENT_LE_META:
             switch(hci_event_le_meta_get_subevent_code(packet)){
                 case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
-                    printf("\nConnected");
+                    con_handle = hci_subevent_le_connection_update_complete_get_connection_handle(packet);
+                    printf("\nConnected. con_handle: %d",con_handle);
                     connected = 1;
                     break;
                 default:
@@ -78,14 +80,15 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 //Higher level ATT (GATT) characteristic writes (phone sends data to pico)
 static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size){
     switch (att_handle){
-        // case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
-        //     con_handle = connection_handle;
-        //     break;
+        case ATT_CHARACTERISTIC_94f493cf_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
+            notifications_enabled =  little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
+            printf("\nNotifications enabled: %d",notifications_enabled);
+            break;
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
             //Characteristic packets are in the form: doubleCheck leftThrottle rightThrottle
             //0xa1 is the doubleCheck first packet (MOTOR_CONTROL_PACKET)
             if(buffer_size>=3 && buffer[0]==MOTOR_CONTROL_PACKET){
-                //printf("\nIncoming motor control packet");
+                //printf("\nIncoming motor control packet, b1: %d b2: %d",buffer[1],buffer[2]);
                 update_throttle(buffer[1],buffer[2]);
             }
             break;
@@ -103,4 +106,10 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     return 0;
 }
 
-
+int send_stuck_notification(){
+    if(connected && con_handle){
+        uint8_t buffer[2] = {STUCK_PACKET,1};
+        int result = att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493cf_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,buffer,2);
+        printf("\nSent stuck, result: %d",result);
+    }
+}
