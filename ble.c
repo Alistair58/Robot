@@ -87,7 +87,7 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
             //Characteristic packets are in the form: doubleCheck leftThrottle rightThrottle
             //0xa1 is the doubleCheck first packet (MOTOR_CONTROL_PACKET)
-            if(buffer_size>=3 && buffer[0]==MOTOR_CONTROL_PACKET){
+            if(buffer_size>=3 && buffer[0]==MOTOR_CONTROL_PACKET && !auto_mode){//Rogue packets after auto_mode can occur
                 //printf("\nIncoming motor control packet, b1: %d b2: %d",buffer[1],buffer[2]);
                 update_throttle(buffer[1],buffer[2]);
             }

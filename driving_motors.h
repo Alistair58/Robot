@@ -2,6 +2,7 @@
 #define DRIVING_MOTOR_H
 
 #include "pico/stdlib.h" //uint
+#include "data_structures.h" //movement_stack
 
 //Facing the direction of the robot
 //Driving motors
@@ -42,6 +43,13 @@ void motor_speed_manage_blocking(void);
 static bool he_update_speed(int ADC_PIN,bool *high,uint32_t *last_high,float *speed,int32_t curr_time);
 static float manage_pwm(pid_values *pid_vals);
 void turn_robot(float radians, bool clockwise);
-bool forwards(float distance);
+float straight(float distance,bool obstacle_avoidance_enabled);
+void check_side(bool right,int *side_check_count,bool *tried,bool *object_in_front,movement_stack *ms);
+int obstacle_avoidance();
+
+//Needed in movement.h
+extern uint16_t l_spoke_count; 
+extern uint16_t r_spoke_count;
+extern const float wheel_radius; //in metres
 
 #endif

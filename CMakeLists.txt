@@ -48,6 +48,8 @@ add_executable(robot_control
     stepper_motor.c
     ultrasound.c
     auto_mode.c
+    data_structures.c
+    movement.c
 )
 
 pico_set_program_name(robot_control "robot_control")

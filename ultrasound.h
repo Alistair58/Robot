@@ -9,5 +9,8 @@ void ultrasound_init(void);
 void ultrasound_trig(float *dest);
 void ultrasound_rising_edge(uint gpio,uint32_t events);
 void ultrasound_falling_edge(uint gpio,uint32_t events);
+float ultrasound_blocking();
+
+extern bool us_in_progress;
 
 #endif

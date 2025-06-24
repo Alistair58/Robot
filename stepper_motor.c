@@ -83,6 +83,7 @@ bool put_stepper(int a,int b,int c,int d,uint64_t usDelay,bool reset){
 void reset_stepper(void){
     sleep_ms(10);//Wait for the current rotation to stop
     printf("\nResetting stepper by: %f",current_stepper_rotation);
+    if(current_stepper_rotation==0) return;
     stepper_motor_blocking(fabs(current_stepper_rotation),current_stepper_rotation<0,true);
     //if it is currently positive, we are currently clockwise and need to rotate anti-clockwise and so clockwise is false
 }

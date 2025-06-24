@@ -8,8 +8,9 @@
 #include "ble.h" 
 #include "globals.h"
 
+//Made auto-mode more reliable 
+
 //TODO
-//Fix auto mode not starting reliably
 //Obstacle avoidance code
 //Needs a stack
 
@@ -25,6 +26,7 @@ int main(){
         printf("CYW43 init failed\n");
         return 1;
     }
+    
     // Turn on the LED
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
     gpio_pins_init();
