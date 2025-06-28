@@ -3,6 +3,7 @@
 #include "pico/stdlib.h"
 #include "stepper_motor.h"
 #include "globals.h"
+#include "auto_mode.h"
 
 static float current_stepper_rotation = 0;
 //positive is clockwise
@@ -31,9 +32,11 @@ void stepper_motor_blocking(float radians,bool clockwise,bool reset){
     int gear_ratio = 64;
     float radians_per_cycle = (2*M_PI)/(gear_ratio*phases_per_cycle);
     uint64_t usDelay = (uint64_t) (((float)1/(phases*phases_per_cycle*rotation_freq*gear_ratio))*1000000);
-    float radians_travelled = 0;
+    float radians_travelled = 0.0f;
     if(!clockwise){
-        while (radians_travelled<radians) {
+        //Only runs during auto mode or when it is being reset
+        while ((radians_travelled+radians_per_cycle)<=radians && (auto_mode||reset)) {
+            //This will undershoot instead of overshooting
             //Sequence taken from: https://wiki.seeedstudio.com/Gear_Stepper_Motor_Driver_Pack/
             //A is IN2, B is IN1, C is IN4, D is IN3
             for(int i=0;i<8;i++){
@@ -49,7 +52,7 @@ void stepper_motor_blocking(float radians,bool clockwise,bool reset){
         }
     }
     else{
-        while (radians_travelled<radians) {
+        while ((radians_travelled+radians_per_cycle)<=radians && (auto_mode||reset)) {
             //Reversed sequence
             for(int i=7;i>=0;i--){
                 if(!put_stepper(
@@ -63,8 +66,9 @@ void stepper_motor_blocking(float radians,bool clockwise,bool reset){
             current_stepper_rotation+=radians_per_cycle;
         }
     }
-    printf("\nEnded stepper_motor_blocking");
-    put_stepper(0,0,0,0,0,reset); 
+    printf("\nEnded stepper_motor_blocking. Radians: %f, Radians_travelled: %f",radians,radians_travelled);
+    put_stepper(0,0,0,0,0,reset);
+    if(!auto_mode && !reset) core1_ended();
 }
 
 bool put_stepper(int a,int b,int c,int d,uint64_t usDelay,bool reset){

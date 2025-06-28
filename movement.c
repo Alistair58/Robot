@@ -8,6 +8,7 @@
 #include "ble.h"
 #include "stepper_motor.h"
 #include "ultrasound.h"
+#include "auto_mode.h"
 
 void turn_robot(float radians, bool clockwise){
     //set one motor one direction and the other the other way
@@ -47,8 +48,7 @@ void turn_robot(float radians, bool clockwise){
             sleep_ms(update_interval);
         }
         else{
-            update_throttle(50,50);
-            return;
+            core1_ended();
         }   
     }
 }
@@ -128,8 +128,8 @@ float straight(float distance,bool obstacle_avoidance_enabled){
         }  
         else{
             printf("\nNo auto_mode or not connected");
-            update_throttle(50,50);
-            return ((float)(l_s_count+r_s_count)/2)*(wheel_radius*2*M_PI/5);
+            core1_ended(); //calls exit and so return value is never used
+            return -1;
         }
     }   
 }
@@ -164,11 +164,12 @@ int obstacle_avoidance(){
         }
     }
     bool object_to_side = true;
-    
     while(object_to_side){
         //we are now facing the front and need to travel perpendicular to the face of the obstacle
         //until we have gone past it
-        forwards_distance += straight(0.15,true); //can recusively call obstacle avoidance
+        forwards_distance += straight(0.15,false); 
+        //TODO
+        //TURN ON OBSTACLE AVOIDANCE
         //e.g. in the scenario we meet an object that looks like a step from a bird's eye view
         stepper_motor_blocking(M_PI_2,right_invalid,false);
         //if the right is invalid, then we are on the left 
@@ -181,7 +182,7 @@ int obstacle_avoidance(){
         
     }
     //rejoin the main path
-    ms_backtrack(&ms);
+    //ms_backtrack(&ms);
     return forwards_distance;
     
 }
@@ -201,7 +202,9 @@ void check_side(bool right,int *side_check_count,bool *side_invalid,bool *object
             ms_push(ms,turn_to_front);
         }
         (*side_check_count)++;
-        float distance_travelled = straight(0.15,true); 
+        float distance_travelled = straight(0.15,false); 
+        //TODO
+        //TURN ON OBSTACLE AVOIDANCE
         movement along_side = {STRAIGHT,distance_travelled};
         ms_push(ms,along_side);
         if(distance_travelled<(0.15-0.03)){
@@ -229,7 +232,9 @@ void ms_backtrack(movement_stack *ms){
         switch(mv.type){
             case STRAIGHT:
                 turn_robot(M_PI,true); // so that we can go forwards instead of backwards
-                straight(mv.value,true); 
+                straight(mv.value,false); 
+                //TODO
+                //TURN ON OBSTACLE AVOIDANCE
                 //go back the way we came
                 turn_robot(M_PI,true);
                 break;

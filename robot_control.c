@@ -8,11 +8,10 @@
 #include "ble.h" 
 #include "globals.h"
 
-//Made auto-mode more reliable 
-
 //TODO
-//Obstacle avoidance code
-//Needs a stack
+//Stepper motor reset mechanism
+//Add more magnets to robot wheels
+//Debug obstacle avoidance
 
 int connected = 0;
 bool auto_mode = false;

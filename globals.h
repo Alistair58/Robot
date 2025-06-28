@@ -14,5 +14,6 @@
     exit(PICO_ERROR_INSUFFICIENT_RESOURCES);
 extern int connected;
 extern bool auto_mode;
+extern bool core1_running;
 
 #endif
