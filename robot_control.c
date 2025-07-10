@@ -11,12 +11,15 @@
 
 //TODO
 //Stepper motor reset mechanism
+// - BLE write characteristic sent from app
+// - App displays message about finger and confirmation of finger
+// - Rotates stepper pi/4 in both directions until it finds something at a short distance and then stops
 //Debug obstacle avoidance
 
 //Mechanical bugs:
 //Battery low - affects BLE connection and green LED is dimmer
 //Hall effect sensor moved - voltages for magnets are different and so spoke counts 
-//  (and hence rotations and distances) will be off
+//  (and, by consequence, rotations and distances) will be off
 
 int connected = 0;
 bool auto_mode = false;

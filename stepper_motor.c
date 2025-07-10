@@ -4,6 +4,8 @@
 #include "stepper_motor.h"
 #include "globals.h"
 #include "auto_mode.h"
+#include "ultrasound.h"
+#include "ble.h"
 
 static float current_stepper_rotation = 0;
 //positive is clockwise
@@ -45,7 +47,7 @@ void stepper_motor_blocking(float radians,bool clockwise,bool reset){
                     (i>0 && i<4)?0:1,
                     (i>2 && i<6)?0:1,
                     (i>4)?0:1,
-                usDelay,reset)) return;
+                usDelay,reset)) break; //Don't return as we may still need to core1_ended()
             }
             radians_travelled+=radians_per_cycle;
             current_stepper_rotation-=radians_per_cycle;
@@ -60,7 +62,7 @@ void stepper_motor_blocking(float radians,bool clockwise,bool reset){
                     (i>0 && i<4)?0:1,
                     (i>2 && i<6)?0:1,
                     (i>4)?0:1,
-                usDelay,reset)) return;
+                usDelay,reset)) break;
             }
             radians_travelled+=radians_per_cycle;
             current_stepper_rotation+=radians_per_cycle;
@@ -90,4 +92,61 @@ void reset_stepper(void){
     if(current_stepper_rotation==0) return;
     stepper_motor_blocking(fabs(current_stepper_rotation),current_stepper_rotation<0,true);
     //if it is currently positive, we are currently clockwise and need to rotate anti-clockwise and so clockwise is false
+}
+
+void turret_calibration(void){
+    float rotation_freq = 0.25f; //in hertz
+    int phases = 8;
+    int phases_per_cycle = 8;
+    int gear_ratio = 64;
+    float radians_per_cycle = (2*M_PI)/(gear_ratio*phases_per_cycle);
+    uint64_t usDelay = (uint64_t) (((float)1/(phases*phases_per_cycle*rotation_freq*gear_ratio))*1000000);
+    float radians_travelled = 0.0f;
+
+    //Only travels Pi/4 to reduce the likelihood of the wires getting broken
+    while ((radians_travelled+radians_per_cycle)<=M_PI_4 && connected) {
+        for(int i=0;i<8;i++){
+            put_stepper(
+                (i<2 || i>6)?0:1,
+                (i>0 && i<4)?0:1,
+                (i>2 && i<6)?0:1,
+                (i>4)?0:1,
+            usDelay,true);
+        }
+        radians_travelled+=radians_per_cycle;
+        current_stepper_rotation-=radians_per_cycle;
+        float object_distance = ultrasound_blocking();
+        if(object_distance<0.15f){
+            current_stepper_rotation = 0;
+            put_stepper(0,0,0,0,0,true);
+            send_turret_calibrated_notification(true);
+            return;
+        }
+    }
+    radians_travelled = 0;
+    //Pi/4 to get back and then another Pi/4
+    while ((radians_travelled+radians_per_cycle)<=M_PI_2 && connected) {
+        //Reversed sequence
+        for(int i=7;i>=0;i--){
+            put_stepper(
+                (i<2 || i>6)?0:1,
+                (i>0 && i<4)?0:1,
+                (i>2 && i<6)?0:1,
+                (i>4)?0:1,
+            usDelay,true);
+        }
+        radians_travelled+=radians_per_cycle;
+        current_stepper_rotation+=radians_per_cycle;
+        float object_distance = ultrasound_blocking();
+        if(object_distance<0.15f){
+            current_stepper_rotation = 0;
+            put_stepper(0,0,0,0,0,true);
+            send_turret_calibrated_notification(true);
+            return;
+        }
+    }
+    put_stepper(0,0,0,0,0,true);
+    if(!connected) reset_stepper();
+    send_turret_calibrated_notification(false);
+    
 }

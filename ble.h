@@ -8,10 +8,12 @@
 #define MOTOR_CONTROL_PACKET 0xA1 //Inidcates the start of a motor control packet
 #define AUTO_MODE_PACKET 0xAA //Indicates a automatic mode packet
 #define STUCK_PACKET 0xAF
+#define TURRET_CALIBRATION_PACKET 0xAB
 
 void ble_setup();
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 static int att_write_callback(hci_con_handle_t con_handle, uint16_t att_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size);
 int send_stuck_notification();
+int send_turret_calibrated_notification(bool success);
 
 #endif

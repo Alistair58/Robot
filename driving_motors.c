@@ -152,7 +152,7 @@ static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *s
     adc_select_input(ADC_PIN);
     uint16_t raw_adc = adc_read();
     float voltage = raw_adc*conversion_factor;
-    printf("\nRight?: %d Voltage: %f High? %d",ADC_PIN==HE_R_ADC,voltage,*high);
+    //printf("\nRight?: %d Voltage: %f High? %d",ADC_PIN==HE_R_ADC,voltage,*high);
     if(*high && voltage<low_voltage){
         *high = false;
     }
@@ -160,7 +160,7 @@ static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *s
         *high = true;
         if(*last_high){
             *speed = spoke_angle/((float)(curr_time-*last_high)/1000000); //convert to seconds from micro
-            printf("\nHigh: speed: %f",*speed);
+            //printf("\nHigh: speed: %f",*speed);
             *last_high = curr_time;
             return true;
         }
@@ -200,8 +200,8 @@ static float manage_pwm(pid_values *pid_vals){
     *(pid_vals->duty) = p_weight*proportion + i_weight*(pid_vals->integral) + d_weight*derivative;
     if(*(pid_vals->duty)>1000) *(pid_vals->duty) = 1000;
     if(*(pid_vals->duty)<-1000) *(pid_vals->duty) = -1000;
-    printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
-        *(pid_vals->user_throttle),desired_speed,curr_speed,error,p_weight*proportion,i_weight*(pid_vals->integral),d_weight*derivative,*(pid_vals->duty));
+    //printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
+    //    *(pid_vals->user_throttle),desired_speed,curr_speed,error,p_weight*proportion,i_weight*(pid_vals->integral),d_weight*derivative,*(pid_vals->duty));
     //Set direction pins
     gpio_put(pid_vals->gpio_forwards,(*(pid_vals->duty)>0)?1:0);
     gpio_put(pid_vals->gpio_backwards,(*(pid_vals->duty)>0)?0:1);

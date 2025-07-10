@@ -16,7 +16,8 @@ const uint8_t adv_data[] = { //Advertising data
 };
 const uint8_t adv_data_len = sizeof(adv_data);
 hci_con_handle_t con_handle = 0;
-bool notifications_enabled = false;
+bool stuck_notifications_enabled = false;
+bool turret_notifications_enabled = false;
 
 void ble_setup(){
     l2cap_init();
@@ -80,9 +81,13 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 //Higher level ATT (GATT) characteristic writes (phone sends data to pico)
 static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size){
     switch (att_handle){
-        case ATT_CHARACTERISTIC_94f493cf_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
-            notifications_enabled =  little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
-            printf("\nNotifications enabled: %d",notifications_enabled);
+        case ATT_CHARACTERISTIC_94f493ce_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
+            stuck_notifications_enabled =  little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
+            printf("\nStuck notifications enabled: %d",stuck_notifications_enabled);
+            break;
+        case ATT_CHARACTERISTIC_94f493d0_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
+            turret_notifications_enabled =  little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
+            printf("\nTurret calibration notifications enabled: %d",turret_notifications_enabled);
             break;
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
             //Characteristic packets are in the form: doubleCheck leftThrottle rightThrottle
@@ -100,6 +105,13 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
                 set_auto_mode(buffer[1]);
             }
             break;
+        case ATT_CHARACTERISTIC_94f493d0_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
+            //0xab is the doubleCheck first packet (TURRET_CALIBRATION_PACKET)
+            printf("\nTurret calibration packet");
+            if(buffer[0]==TURRET_CALIBRATION_PACKET && buffer[1]==1 && !auto_mode){
+                turret_calibration();
+            }
+            break;
         default:
             break;
     }
@@ -109,7 +121,16 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
 int send_stuck_notification(){
     if(connected && con_handle){
         uint8_t buffer[2] = {STUCK_PACKET,1};
-        int result = att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493cf_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,buffer,2);
+        int result = att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493ce_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,buffer,2);
         printf("\nSent stuck, result: %d",result);
+    }
+}
+
+
+int send_turret_calibrated_notification(bool success){
+    if(connected && con_handle){
+        uint8_t buffer[2] = {TURRET_CALIBRATION_PACKET,success?2:3};
+        int result = att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493d0_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,buffer,2);
+        printf("\nSent turret calibrated, result: %d",result);
     }
 }

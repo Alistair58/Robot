@@ -12,4 +12,6 @@ CHARACTERISTIC,  94f493ca-c579-41c2-87ac-e12c02455864, WRITE_WITHOUT_RESPONSE | 
 // Automatic Mode Characteristic, with write and response
 CHARACTERISTIC,  94f493cc-c579-41c2-87ac-e12c02455864, WRITE | DYNAMIC,
 // Stuck Characteristic, notify only 
-CHARACTERISTIC, 94f493cf-c579-41c2-87ac-e12c02455864, NOTIFY | DYNAMIC
+CHARACTERISTIC, 94f493ce-c579-41c2-87ac-e12c02455864, NOTIFY | DYNAMIC
+// Turret Calibration Charactersitic with write,response and notify (for when finished) 
+CHARACTERISTIC, 94f493d0-c579-41c2-87ac-e12c02455864, WRITE | NOTIFY | DYNAMIC
