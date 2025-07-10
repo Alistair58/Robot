@@ -8,10 +8,15 @@
 #include "ble.h" 
 #include "globals.h"
 
+
 //TODO
 //Stepper motor reset mechanism
-//Add more magnets to robot wheels
 //Debug obstacle avoidance
+
+//Mechanical bugs:
+//Battery low - affects BLE connection and green LED is dimmer
+//Hall effect sensor moved - voltages for magnets are different and so spoke counts 
+//  (and hence rotations and distances) will be off
 
 int connected = 0;
 bool auto_mode = false;

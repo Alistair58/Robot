@@ -26,12 +26,8 @@ void core1_main(void){ //auto mode
     float distance;
     int direction = 0;
     while(1){
-        stepper_motor_blocking(M_PI_2,true,false);
-        reset_stepper();
-        sleep_ms(2000);
-        stepper_motor_blocking(M_PI_2,false,false);
-        reset_stepper();
-        sleep_ms(2000);
+        turn_robot(10*M_PI,true); //5 rotations - to get correct spokes for 1 rotations
+        sleep_ms(4000);
         // printf("\nGoing forwards");
         // straight(0,true);
         // for(int i=0;i<10;i++){

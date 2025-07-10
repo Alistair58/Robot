@@ -29,9 +29,9 @@ static float r_duty = 0;
 //Integral is good for maintaining the current speed and produces stable behaviour
 //but if it is too high, it will be very slow to respond
 //Derivative suffers from the drawback of proportion and so has a very low relative weight 
-static const float p_weight = 90;
-static const float i_weight = 1e-4;
-static const float d_weight = 5e4;
+static const float p_weight = 70; //90
+static const float i_weight = 1e-4; //1e-4
+static const float d_weight = 0; //5e4
 static uint l_slice_num; //Initialised in gpio_pins_init
 static uint l_channel;
 static uint r_slice_num;
@@ -87,9 +87,9 @@ void motor_speed_manage_blocking(void){
     uint32_t last_r_high = 0; //it starts counting when we hit a spoke
     uint32_t last_l_high = 0;
     uint32_t curr_time = time_us_32();
-    const int update_interval = 10; //10ms
+    const int update_interval = 2; //2ms
     int counter = 0;
-    const int pwm_update_ratio = 10; //higher = less updates
+    const int pwm_update_ratio = 20; //higher = less updates
     pid_values l_pid_vals = {
         &curr_l_speed,
         &user_l_throttle,
@@ -137,20 +137,22 @@ void motor_speed_manage_blocking(void){
 
 static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *speed,int32_t curr_time){
     //returns true if a spoke has been seen
-    const int max_spoke_wait = 1500000; //1.5s 2Pi/5/1.5 = 0.8378 rads^-1 is the smallest speed measurable
-    //Sensors
-    //1.6v is about normal
-    //>1.8v when right in front of a magnet
+    const int max_spoke_wait = 500000; //0.5s Pi/16/0.5 = 0.393 rads^-1 is the smallest speed measurable
+    //Empirical values for sensors
+    //VERY sensitive to the angle and distance of the hall effect sensor
     //When the larger, flatter side is facing the pole the voltage is largest
-    const float high_voltage = 1.75; //gap so it is more stable
-    const float low_voltage = 1.65;
+    const float high_voltage = 1.90; 
+    //Lower high_voltage reduces the chance of a spoke being missed
+    const float low_voltage = 1.70;
+    //Higher low_voltage reduces the chance of a gap being missed
+    //gap stops double counts
     // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
     const float conversion_factor = 3.3f / (1 << 12);
-    const float spoke_angle = (float)2/5*M_PI; //5 spokes, therefore, roughly the angle between each is 2/5 pi
-
+    const float spoke_angle = (float)M_PI/8; //16 spokes, therefore, roughly the angle between each is 2/16 pi = pi/8   
     adc_select_input(ADC_PIN);
     uint16_t raw_adc = adc_read();
     float voltage = raw_adc*conversion_factor;
+    printf("\nRight?: %d Voltage: %f High? %d",ADC_PIN==HE_R_ADC,voltage,*high);
     if(*high && voltage<low_voltage){
         *high = false;
     }
@@ -158,7 +160,7 @@ static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *s
         *high = true;
         if(*last_high){
             *speed = spoke_angle/((float)(curr_time-*last_high)/1000000); //convert to seconds from micro
-            printf("\nSpeed: %f",*speed);
+            printf("\nHigh: speed: %f",*speed);
             *last_high = curr_time;
             return true;
         }
@@ -198,8 +200,8 @@ static float manage_pwm(pid_values *pid_vals){
     *(pid_vals->duty) = p_weight*proportion + i_weight*(pid_vals->integral) + d_weight*derivative;
     if(*(pid_vals->duty)>1000) *(pid_vals->duty) = 1000;
     if(*(pid_vals->duty)<-1000) *(pid_vals->duty) = -1000;
-    //printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
-    //    *(pid_vals->user_throttle),desired_speed,curr_speed,error,p_weight*proportion,i_weight*(pid_vals->integral),d_weight*derivative,*(pid_vals->duty));
+    printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
+        *(pid_vals->user_throttle),desired_speed,curr_speed,error,p_weight*proportion,i_weight*(pid_vals->integral),d_weight*derivative,*(pid_vals->duty));
     //Set direction pins
     gpio_put(pid_vals->gpio_forwards,(*(pid_vals->duty)>0)?1:0);
     gpio_put(pid_vals->gpio_backwards,(*(pid_vals->duty)>0)?0:1);
@@ -207,6 +209,7 @@ static float manage_pwm(pid_values *pid_vals){
     pwm_set_chan_level(pid_vals->slice_num, pid_vals->channel, abs((int)*(pid_vals->duty))); //set duty cycle
     pwm_set_enabled(pid_vals->slice_num, true); // Set the PWM running
     pid_vals->last_pwm_update = *(pid_vals->curr_time);
+    pid_vals->last_error = error;
     //printf("dutyChanged: %d, duty>=1000: %d, time since last duty change: %lu, speed==0: %d",(int)*(pid_vals->duty)!=(int)prev_duty,fabs(*(pid_vals->duty))>=1000,(*(pid_vals->curr_time)-pid_vals->last_duty_change),*(pid_vals->curr_speed)==0);
     if((int)*(pid_vals->duty)!=(int)prev_duty){
         pid_vals->last_duty_change = *(pid_vals->curr_time);

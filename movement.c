@@ -15,10 +15,11 @@ void turn_robot(float radians, bool clockwise){
     //count the number of spokes seen, want same number for both wheels
     //Constants will be empirical
 
-    const float spokes_in_full_rotation =  11;
-    //For a hard surface (tested on the chair mat) with the plastic lego wheels
-    float target_spokes = floor(spokes_in_full_rotation*(radians/(2*M_PI)));
-    
+    const float spokes_in_full_rotation =  39.2;
+    float target_spokes = roundf(spokes_in_full_rotation*(radians/(2*M_PI)));
+    //roundf allows for the robot to equally under- and over-rotate and so on average it ends up in the right place
+    //As opposed to floor
+
     uint16_t l_start_spoke_count = l_spoke_count;
     uint16_t r_start_spoke_count = r_spoke_count;
     int32_t l_s_count = 0;
@@ -51,6 +52,34 @@ void turn_robot(float radians, bool clockwise){
             core1_ended();
         }   
     }
+
+    //ONLY TURNING ONE WHEEL VERSION:
+    // const float spokes_in_full_rotation =  80?;
+    // //For a hard surface (tested on the chair mat) with the plastic lego wheels
+    // float target_spokes = roundf(spokes_in_full_rotation*(radians/(2*M_PI)));
+    // //roundf allows for the robot to equally under and over rotate and so on average it ends up in the right place
+    // //as opposed to floor
+    // uint16_t start_spoke_count = clockwise?l_spoke_count:r_spoke_count;
+    // int32_t s_count = 0;
+    // uint16_t *spoke_count = clockwise?&l_spoke_count:&r_spoke_count;
+    // uint32_t curr_time = time_us_32();
+    // const int update_interval = 10; //10ms
+    // const int forwards_throttle = 90;
+    // update_throttle((clockwise)?forwards_throttle:50,(clockwise)?50:forwards_throttle);
+    // while (1) {
+    //     if(auto_mode && connected){
+    //         s_count = (int32_t)*spoke_count - (int32_t)start_spoke_count;
+    //         if(s_count<0) s_count+= 0xffff; //spoke count can reset to zero if it goes past 65535
+    //         if(((int32_t)target_spokes) <= s_count && ((int32_t)target_spokes)){
+    //             update_throttle(50,50);
+    //             return;
+    //         }
+    //         sleep_ms(update_interval);
+    //     }
+    //     else{
+    //         core1_ended();
+    //     }   
+    // }
 }
 
 float straight(float distance,bool obstacle_avoidance_enabled){ 
@@ -60,14 +89,14 @@ float straight(float distance,bool obstacle_avoidance_enabled){
     //returns how far the robot actually travelled (may be shorter than argument due to obstacle)
     //obstacle avoidance doesn't work if we're going backwards
 
-    //5 spokes and so the distance of each one is r*(2pi/5)
+    //16 spokes and so the distance of each one is r*(pi/8)
     //r = 3.4cm 
     float target_spokes;
     if(distance==0){ 
         target_spokes = 0;
     }
     else{
-        target_spokes = fabs(distance)/(wheel_radius*2*M_PI/5);
+        target_spokes = fabs(distance)/(wheel_radius*M_PI/8); //number of r*thetas required
         if(target_spokes<1){
             printf("\nDistance is too small to measure accurately");
             return 0;
@@ -105,7 +134,7 @@ float straight(float distance,bool obstacle_avoidance_enabled){
                     return obstacle_avoidance();
                 }
                 else{
-                    return ((float)(l_s_count+r_s_count)/2)*(wheel_radius*2*M_PI/5);
+                    return ((float)(l_s_count+r_s_count)/2)*(wheel_radius*M_PI/8);
                     //return the distance travelled
                 }
                 
@@ -115,7 +144,7 @@ float straight(float distance,bool obstacle_avoidance_enabled){
                 if(((int32_t)target_spokes) <= l_s_count && ((int32_t)target_spokes) <= r_s_count){
                     printf("\nSpokes met");
                     update_throttle(50,50);
-                    return ((float)(l_s_count+r_s_count)/2)*(wheel_radius*2*M_PI/5);
+                    return ((float)(l_s_count+r_s_count)/2)*(wheel_radius*M_PI/8);
                 }
                 else if(((int32_t)target_spokes) == l_s_count){
                     update_throttle(50,(distance>0)?forwards_throttle:backwards_throttle);
