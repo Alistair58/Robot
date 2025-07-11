@@ -94,7 +94,14 @@ void reset_stepper(void){
     //if it is currently positive, we are currently clockwise and need to rotate anti-clockwise and so clockwise is false
 }
 
+//Blocking and so only runs on core1
 void turret_calibration(void){
+    uint core_num = get_core_num();
+    //We will be calling core1_ended and so we need to be sure that we are on the right core
+    if(core_num!=1){
+        perror("turret_calibration only runs on core1");
+        exit(1);
+    }
     float rotation_freq = 0.25f; //in hertz
     int phases = 8;
     int phases_per_cycle = 8;
@@ -102,7 +109,6 @@ void turret_calibration(void){
     float radians_per_cycle = (2*M_PI)/(gear_ratio*phases_per_cycle);
     uint64_t usDelay = (uint64_t) (((float)1/(phases*phases_per_cycle*rotation_freq*gear_ratio))*1000000);
     float radians_travelled = 0.0f;
-
     //Only travels Pi/4 to reduce the likelihood of the wires getting broken
     while ((radians_travelled+radians_per_cycle)<=M_PI_4 && connected) {
         for(int i=0;i<8;i++){
@@ -120,6 +126,7 @@ void turret_calibration(void){
             current_stepper_rotation = 0;
             put_stepper(0,0,0,0,0,true);
             send_turret_calibrated_notification(true);
+            core1_ended();
             return;
         }
     }
@@ -142,11 +149,12 @@ void turret_calibration(void){
             current_stepper_rotation = 0;
             put_stepper(0,0,0,0,0,true);
             send_turret_calibrated_notification(true);
+            core1_ended();
             return;
         }
     }
-    put_stepper(0,0,0,0,0,true);
-    if(!connected) reset_stepper();
+    reset_stepper();
     send_turret_calibrated_notification(false);
+    core1_ended();
     
 }

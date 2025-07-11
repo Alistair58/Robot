@@ -10,8 +10,10 @@
 jmp_buf core1_exit_buf;
 
 bool core1_running = false;
+void (*core1_action)(void) = auto_mode_actions;
 
-void core1_main(void){ //auto mode
+//Requires core1_action to be set
+void core1_main(){ //auto mode
     if (setjmp(core1_exit_buf) != 0){
         //sets the jump position on the initial iteration which returns 0
         //and then core1_ended causes a jump with value 1
@@ -23,6 +25,10 @@ void core1_main(void){ //auto mode
         return;
     }
     core1_running = true;
+    core1_action();
+}
+
+void auto_mode_actions(void){
     float distance;
     int direction = 0;
     while(1){
@@ -36,7 +42,6 @@ void core1_main(void){ //auto mode
         //     sleep_ms(1000);
         // }
     }
-
 }
 
 void core1_ended(void){
@@ -61,6 +66,7 @@ void set_auto_mode(uint8_t value){
         printf("\nAuto_mode enabled");
         update_throttle(50,50);
         multicore_reset_core1();
+        core1_action = auto_mode_actions;
         multicore_launch_core1(core1_main);
     }
 }

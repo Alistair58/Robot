@@ -4,6 +4,7 @@
 #include "globals.h"
 #include "driving_motors.h" //for update_throttle
 #include "stepper_motor.h" //for reset_stepper
+#include "pico/multicore.h"
 #include "auto_mode.h"
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
@@ -16,6 +17,8 @@ const uint8_t adv_data[] = { //Advertising data
 };
 const uint8_t adv_data_len = sizeof(adv_data);
 hci_con_handle_t con_handle = 0;
+hci_con_handle_t stuck_notification_handle = 0;
+hci_con_handle_t turret_notification_handle = 0;
 bool stuck_notifications_enabled = false;
 bool turret_notifications_enabled = false;
 
@@ -84,10 +87,12 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
         case ATT_CHARACTERISTIC_94f493ce_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
             stuck_notifications_enabled =  little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
             printf("\nStuck notifications enabled: %d",stuck_notifications_enabled);
+            stuck_notification_handle = connection_handle;
             break;
         case ATT_CHARACTERISTIC_94f493d0_c579_41c2_87ac_e12c02455864_01_CLIENT_CONFIGURATION_HANDLE:
             turret_notifications_enabled =  little_endian_read_16(buffer, 0) == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION;
             printf("\nTurret calibration notifications enabled: %d",turret_notifications_enabled);
+            turret_notification_handle = connection_handle;
             break;
         case ATT_CHARACTERISTIC_94f493ca_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE:
             //Characteristic packets are in the form: doubleCheck leftThrottle rightThrottle
@@ -109,7 +114,10 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
             //0xab is the doubleCheck first packet (TURRET_CALIBRATION_PACKET)
             printf("\nTurret calibration packet");
             if(buffer[0]==TURRET_CALIBRATION_PACKET && buffer[1]==1 && !auto_mode){
-                turret_calibration();
+                //The reset is blocking
+                multicore_reset_core1();
+                core1_action = turret_calibration;
+                multicore_launch_core1(core1_main);
             }
             break;
         default:
@@ -119,7 +127,7 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
 }
 
 int send_stuck_notification(){
-    if(connected && con_handle){
+    if(connected && stuck_notification_handle){
         uint8_t buffer[2] = {STUCK_PACKET,1};
         int result = att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493ce_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,buffer,2);
         printf("\nSent stuck, result: %d",result);
@@ -128,8 +136,8 @@ int send_stuck_notification(){
 
 
 int send_turret_calibrated_notification(bool success){
-    if(connected && con_handle){
-        uint8_t buffer[2] = {TURRET_CALIBRATION_PACKET,success?2:3};
+    if(connected && turret_notification_handle){
+        uint8_t buffer[2] = {TURRET_CALIBRATION_PACKET,(success?2:3)};
         int result = att_server_notify(con_handle, ATT_CHARACTERISTIC_94f493d0_c579_41c2_87ac_e12c02455864_01_VALUE_HANDLE,buffer,2);
         printf("\nSent turret calibrated, result: %d",result);
     }
