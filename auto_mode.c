@@ -32,15 +32,8 @@ void auto_mode_actions(void){
     float distance;
     int direction = 0;
     while(1){
-        turn_robot(10*M_PI,true); //5 rotations - to get correct spokes for 1 rotations
-        sleep_ms(4000);
-        // printf("\nGoing forwards");
-        // straight(0,true);
-        // for(int i=0;i<10;i++){
-        //     if(!auto_mode) return;
-        //     printf("\nSleeping");
-        //     sleep_ms(1000);
-        // }
+        straight(1,true);
+        sleep_ms(10000);
     }
 }
 

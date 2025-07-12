@@ -32,6 +32,8 @@ static float r_duty = 0;
 static const float p_weight = 70; //90
 static const float i_weight = 1e-4; //1e-4
 static const float d_weight = 0; //5e4
+static const float pid_l_weight = 0.9f;
+static const float pid_r_weight = 1.0f;
 static uint l_slice_num; //Initialised in gpio_pins_init
 static uint l_channel;
 static uint r_slice_num;
@@ -197,7 +199,13 @@ static float manage_pwm(pid_values *pid_vals){
     //If we're changing direction, a large integral in the other direction doesn't help
     if(*(pid_vals->user_throttle)==50) pid_vals->integral = 0;
     //Sometimes get stuck at 300 duty for example and this can cause movement so slow that hall effect will count speed as 0 
-    *(pid_vals->duty) = p_weight*proportion + i_weight*(pid_vals->integral) + d_weight*derivative;
+    *(pid_vals->duty) = 
+    ((pid_vals->gpio_forwards==DM_L_FORWARDS)?pid_l_weight:pid_r_weight)* 
+    (
+      p_weight*proportion + 
+      i_weight*(pid_vals->integral) + 
+      d_weight*derivative
+    );
     if(*(pid_vals->duty)>1000) *(pid_vals->duty) = 1000;
     if(*(pid_vals->duty)<-1000) *(pid_vals->duty) = -1000;
     //printf("\nuser_throttle: %d desired_speed: %f curr_speed: %f error: %f (all weighted) proportion: %f integral: %f derivative: %f duty: %f",
