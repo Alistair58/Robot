@@ -7,6 +7,7 @@
 #include "driving_motors.h" 
 #include "ble.h" 
 #include "globals.h"
+#include "imu.h"
 
 
 //TODO
@@ -37,6 +38,7 @@ int main(){
     // Turn on the LED
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
     gpio_pins_init();
+    imu_i2c_init();
     ble_setup();
     motor_speed_manage_blocking();
     return 0;

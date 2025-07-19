@@ -50,6 +50,7 @@ add_executable(robot_control
     auto_mode.c
     data_structures.c
     movement.c
+    imu.c
 )
 
 pico_set_program_name(robot_control "robot_control")
@@ -68,6 +69,7 @@ target_link_libraries(robot_control
         pico_multicore
         hardware_pwm
         hardware_adc
+        hardware_i2c
         )
 # Add the standard include files to the build
 target_include_directories(robot_control PRIVATE
