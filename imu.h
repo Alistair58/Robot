@@ -18,7 +18,6 @@
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
 
-
 void imu_i2c_init(void);
-static void imu_reset();
+
 #endif
