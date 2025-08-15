@@ -50,6 +50,7 @@
         "math.h": "c",
         "stdlib.h": "c",
         "numbers": "c",
-        "imu.h": "c"
+        "imu.h": "c",
+        "functional": "c"
     }
 }
