@@ -9,6 +9,15 @@
 #include "globals.h"
 #include "imu.h"
 
+
+//DONE
+
+
+//TODO
+//Extended kalman filter to get current rotation (yaw)
+//Get accelerometer from IMU and calibrate it
+
+
 //Mechanical bugs:
 //Battery low - affects BLE connection and green LED is dimmer
 //Hall effect sensor moved - voltages for magnets are different and so spoke counts 
@@ -32,7 +41,7 @@ int main(){
     gpio_pins_init();
     imu_i2c_init();
     ble_setup();
-    motor_speed_manage_blocking();
+    control_loop_blocking();
     return 0;
 }
 

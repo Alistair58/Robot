@@ -37,15 +37,26 @@ typedef struct pid_values{ //makes a really messy function signature without thi
     uint8_t gpio_backwards;
 }pid_values;
 
+typedef struct kalman_values{
+    uint16_t *l_spoke_count;
+    uint16_t *r_spoke_count;
+    float mag_vals[3];
+    float last_mag_vals[3];
+    float gyro_vals[3];
+    float last_gyro_vals[3];
+}kalman_values;
+
 void driving_motors_init(void);
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new);
-void motor_speed_manage_blocking(void);
+void control_loop_blocking(void);
 static bool he_update_speed(int ADC_PIN,bool *high,uint32_t *last_high,float *speed,int32_t curr_time);
-static float manage_pwm(pid_values *pid_vals);
+static void manage_pwm(pid_values *pid_vals);
+static void calculate_rotation(int16_t l_spoke_count,int16_t r_spoke_count,float gyro_vals[3],float mag_vals[3]);
 
 //Needed in movement.h
-extern uint16_t l_spoke_count; 
-extern uint16_t r_spoke_count;
+extern int32_t l_spoke_count; 
+extern int32_t r_spoke_count;
 extern const float wheel_radius; //in metres
+extern float rotation;
 
 #endif

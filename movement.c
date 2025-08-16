@@ -62,18 +62,17 @@ void turn_robot(float radians, bool clockwise,int num_wheels_turning){
         float target_spokes = roundf(spokes_in_full_rotation*(radians/(2*M_PI)));
         //roundf allows for the robot to equally under and over rotate and so on average it ends up in the right place
         //as opposed to floor
-        uint16_t start_spoke_count = clockwise?l_spoke_count:r_spoke_count;
+        int32_t start_spoke_count = clockwise?l_spoke_count:r_spoke_count;
         int32_t s_count = 0;
-        uint16_t *spoke_count = clockwise?&l_spoke_count:&r_spoke_count;
+        int32_t *spoke_count = clockwise?&l_spoke_count:&r_spoke_count;
         uint32_t curr_time = time_us_32();
         const int update_interval = 10; //10ms
         const int forwards_throttle = 90;
         update_throttle((clockwise)?forwards_throttle:50,(clockwise)?50:forwards_throttle);
         while (1) {
             if(auto_mode && connected){
-                s_count = (int32_t)*spoke_count - (int32_t)start_spoke_count;
-                if(s_count<0) s_count+= 0xffff; //spoke count can reset to zero if it goes past 65535
-                if(((int32_t)target_spokes) <= s_count && ((int32_t)target_spokes)){
+                s_count = *spoke_count - start_spoke_count;
+                if(((int32_t)target_spokes) <= s_count){
                     update_throttle(50,50);
                     return;
                 }
@@ -116,8 +115,8 @@ float straight(float distance,bool obstacle_avoidance_enabled){
             return 0;
         }
     }
-    uint16_t l_start_spoke_count = l_spoke_count;
-    uint16_t r_start_spoke_count = r_spoke_count;
+    int32_t l_start_spoke_count = l_spoke_count;
+    int32_t r_start_spoke_count = r_spoke_count;
     int32_t l_s_count = 0;
     int32_t r_s_count = 0;
     uint32_t curr_time = time_us_32();
@@ -136,10 +135,8 @@ float straight(float distance,bool obstacle_avoidance_enabled){
     while(1){
         if(auto_mode && connected){
             printf("\nIterating");
-            l_s_count = (int32_t)l_spoke_count - (int32_t)l_start_spoke_count;
-            if(l_s_count<0) l_s_count+= 0xffff; //spoke count can reset to zero if it goes past 65535
-            r_s_count = (int32_t)r_spoke_count - (int32_t)r_start_spoke_count;
-            if(r_s_count<0) r_s_count+= 0xffff;
+            l_s_count = l_spoke_count - l_start_spoke_count;
+            r_s_count = r_spoke_count - r_start_spoke_count;
             us_distance = ultrasound_blocking();
             if(us_distance<0.15){ //Also will stop if us_distance = -1
                 printf("\nObject is too close");

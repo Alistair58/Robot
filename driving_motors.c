@@ -11,11 +11,14 @@
 #include "ble.h"
 #include "auto_mode.h"
 #include "data_structures.h"
+#include "imu.h"
 
 //Vehicle-related
-uint16_t l_spoke_count = 0; //Needed in movement.h
-uint16_t r_spoke_count = 0;
+int32_t l_spoke_count = 0; //Needed in movement.h
+int32_t r_spoke_count = 0;
 const float wheel_radius = 0.034f; //in metres
+float rotation = 0;
+
 static float curr_l_speed = 0;
 static float curr_r_speed = 0;
 static float max_speed = 3.5f; //when spinning in the air, it reaches 3.5 rads^-1
@@ -81,9 +84,7 @@ void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Ca
     user_r_throttle = right_throttle_new;
 }
 
-void motor_speed_manage_blocking(void){
-    //currently recording the time between 2 spokes
-    //therefore, can't tell the direction
+void control_loop_blocking(void){
     bool r_high = false;
     bool l_high = false;
     uint32_t last_r_high = 0; //it starts counting when we hit a spoke
@@ -92,6 +93,8 @@ void motor_speed_manage_blocking(void){
     const int update_interval = 2; //2ms
     int counter = 0;
     const int pwm_update_ratio = 20; //higher = less updates
+    float gyro_vals[3] = {0};
+    float mag_vals[3] = {0};
     pid_values l_pid_vals = {
         &curr_l_speed,
         &user_l_throttle,
@@ -126,9 +129,21 @@ void motor_speed_manage_blocking(void){
             user_r_throttle = 50;
         }
         curr_time = time_us_32();
-        if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,&curr_l_speed,curr_time)) l_spoke_count = (uint16_t)((uint32_t)l_spoke_count+1) & 0xffff;
-        if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,&curr_r_speed,curr_time)) r_spoke_count = (uint16_t)((uint32_t)r_spoke_count+1) & 0xffff;
+        //Spokes must be constantly polled as we don't want to miss them
+        if(he_update_speed(HE_L_ADC,&l_high,&last_l_high,&curr_l_speed,curr_time)){
+            if(l_duty>0)l_spoke_count++;
+            else l_spoke_count--;
+        }
+        if(he_update_speed(HE_R_ADC,&r_high,&last_r_high,&curr_r_speed,curr_time)){
+            if(r_duty>0)r_spoke_count++;
+            else r_spoke_count--;
+        }
+        
         if(counter==0){
+            gyro_read(gyro_vals);
+            mag_read(mag_vals);
+            calculate_rotation(l_spoke_count,r_spoke_count,gyro_vals,mag_vals);
+
             manage_pwm(&l_pid_vals);
             manage_pwm(&r_pid_vals);
         }
@@ -177,7 +192,7 @@ static bool he_update_speed(int ADC_PIN,bool *high, uint32_t *last_high,float *s
     return false;
 }
 
-static float manage_pwm(pid_values *pid_vals){
+static void manage_pwm(pid_values *pid_vals){
     //Sets the duty cycle using PID such that the output speed is as the throttle desires
     float prev_duty = *(pid_vals->duty);
     float desired_speed = max_speed*((float)((*(pid_vals->user_throttle)-50))/50);
@@ -231,3 +246,6 @@ static float manage_pwm(pid_values *pid_vals){
 }
 
 
+static void calculate_rotation(int16_t l_spoke_count,int16_t r_spoke_count,float gyro_vals[3],float mag_vals[3]){
+    //Kalman filter
+}
