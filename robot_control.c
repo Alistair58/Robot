@@ -14,8 +14,9 @@
 
 
 //TODO
-//Extended kalman filter to get current rotation (yaw)
-//Get accelerometer from IMU and calibrate it
+//Fix magnetometer positioning
+//Test kalman filter
+//Test auto mode
 
 
 //Mechanical bugs:

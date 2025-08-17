@@ -51,6 +51,7 @@ add_executable(robot_control
     data_structures.c
     movement.c
     imu.c
+    heading.c
 )
 
 pico_set_program_name(robot_control "robot_control")

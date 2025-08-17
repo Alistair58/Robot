@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
+#include "math.h"
+#include "heading.h"
 
 //Slave address of ICM-20948
 #define IMU_I2C_ADDR 0x69
@@ -61,7 +63,10 @@ void accel_read(float accel_data[3]);
 void calibrate_gyro_blocking(void);
 void calibrate_mag_blocking(void);
 void calibrate_accel_blocking(void);
+float get_mag_heading(void);
+float get_yaw_rate();
 
+extern float mag_start_heading;
 
 
 #endif

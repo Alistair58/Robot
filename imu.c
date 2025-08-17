@@ -4,13 +4,13 @@ static int icm20948_read(uint8_t reg,uint8_t *buffer,int len);
 static int icm20948_write(uint8_t *buffer,int len);
 static int icm20948_write_byte(uint8_t reg,uint8_t byte);
 static bool icm20948_init();
-static void private_mag_read(float mag_data[3],bool with_calibration);
 static void private_gyro_read(float gyro_data[3],bool with_calibration);
 static void private_accel_read(float accel_data[3],bool with_calibration);
+static void calc_kalman_variances_blocking(void);
 static i2c_inst_t *i2c = i2c1;
 static float gyro_calibration_offset[3] = {0};
-static float mag_calibration_offset[3] = {0}; 
 static float accel_calibration_offset[3] = {0};
+float mag_start_heading = 0;
 
 
 static int icm20948_read(uint8_t reg,uint8_t *buffer,int len){
@@ -113,13 +113,9 @@ static bool icm20948_init(){
     }
 }
 
-//Public-facing 
-void mag_read(float mag_data[3]){
-    private_mag_read(mag_data,true);
-}
 
-//Internal
-static void private_mag_read(float mag_data[3],bool with_calibration){
+//Magnetometer doesn't get calibrated
+void mag_read(float mag_data[3]){
     //Tell it to access magnetometer
     
     icm20948_write_byte(REG_BANK_SEL,BANK_3);
@@ -175,30 +171,39 @@ static void private_mag_read(float mag_data[3],bool with_calibration){
         int16_t raw_value = ((int16_t) mag_data_raw[i*2+1] << 8 | mag_data_raw[(i*2)]);
         float micro_tesla = (float)raw_value*4912/(32752); //Max raw value is 32752 which is 4912 micro tesla
         mag_data[i] = micro_tesla;
-        if(with_calibration){
-            mag_data[i] -= mag_calibration_offset[i];
-        }
     }
     printf("\nMagnetometer - X: %f Y: %f Z: %f",mag_data[0],mag_data[1],mag_data[2]);
+}
+
+float get_mag_heading(void){ // between -pi and pi
+    float mag_read_vals[3] = {0};
+    mag_read(mag_read_vals);
+    //atan2(y,x) 
+    float mag_heading = atan2(mag_read_vals[1],mag_read_vals[0]);
+    return mag_heading;
 }
 
 void calibrate_mag_blocking(void){
     const int num_samples = 50;
     //Read 50 mag vals over around 1s
     float mag_read_vals[3] = {0};
-    for(int i=0;i<3;i++){
-        mag_calibration_offset[i] = 0;
-    }
+    mag_start_heading = 0;
     for(int i=0;i<num_samples;i++){
         //The function has a 10ms sleep in it
-        private_mag_read(mag_read_vals,false);
-        for(int i=0;i<3;i++){
-            mag_calibration_offset[i] += mag_read_vals[i];
-        }
+        mag_start_heading += get_mag_heading();
     }
-    for(int i=0;i<3;i++){
-        mag_calibration_offset[i] /= num_samples;
-    }
+    mag_start_heading /= num_samples;
+    heading = mag_start_heading;
+    printf("\nHeading starting at: %f",heading);
+}
+
+
+float get_yaw_rate(){
+    float gyro_data[3] = {0};
+    gyro_read(gyro_data);
+    //yaw is rotation about z axis
+    float rads =  gyro_data[2]*M_PI/180; 
+    return rads; 
 }
 
 //Public-facing
@@ -220,7 +225,7 @@ static void private_gyro_read(float gyro_data[3],bool with_calibration){
             gyro_data[i] -= gyro_calibration_offset[i];
         }
     }
-    printf("\nGyroscope - X: %f Y: %f Z: %f",gyro_data[0],gyro_data[1],gyro_data[2]);
+    //printf("\nGyroscope - X: %f Y: %f Z: %f",gyro_data[0],gyro_data[1],gyro_data[2]);
 }
 
 void calibrate_gyro_blocking(void){
@@ -262,7 +267,7 @@ static void private_accel_read(float accel_data[3],bool with_calibration){
             accel_data[i] -= accel_calibration_offset[i];
         }
     }
-    printf("\nAccelerometer - X: %f Y: %f Z: %f",accel_data[0],accel_data[1],accel_data[2]);
+    //printf("\nAccelerometer - X: %f Y: %f Z: %f",accel_data[0],accel_data[1],accel_data[2]);
 }
 
 void calibrate_accel_blocking(void){
@@ -282,6 +287,26 @@ void calibrate_accel_blocking(void){
     for(int i=0;i<3;i++){
         accel_calibration_offset[i] /= num_samples;
     }
+}
+
+static void calc_kalman_variances_blocking(void){
+    const int num_samples = 250;
+    float gyro_data[3] = {0};
+    //variance = sum(x-mean)^2/n
+    //mean = 0
+    //variance = sum(x)^2/num_samples
+    float gyro_squares = 0;
+    float mag_squares = 0;
+    for(int i=0;i<num_samples;i++){
+        //probably around 40ms for both of these functions
+        private_gyro_read(gyro_data,true);
+        gyro_squares += gyro_data[2]*gyro_data[2]; //heading is rotation about z axis
+        float mag_error = mag_start_heading - get_mag_heading();
+        mag_squares += mag_error*mag_error; 
+    }
+    float gyro_variance = gyro_squares/num_samples;
+    float mag_variance = mag_squares/num_samples;
+    printf("\nGyro variance: %f Mag variance: %f",gyro_variance,mag_variance);
 }
 
 void imu_i2c_init(void){

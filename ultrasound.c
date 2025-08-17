@@ -28,7 +28,7 @@ void ultrasound_trig(float *dest){ //Will store the result in dest
 void ultrasound_rising_edge(uint gpio,uint32_t events){
     if(!us_waiting){
         rising_edge_time = time_us_32();
-        printf("\nRising edge detected");
+        //printf("\nRising edge detected");
         gpio_set_irq_enabled_with_callback(US_ECHO,GPIO_IRQ_EDGE_FALL,true,&ultrasound_falling_edge);
         
     }
@@ -38,9 +38,9 @@ void ultrasound_falling_edge(uint gpio,uint32_t events){
     uint32_t falling_edge_time = time_us_32();
     double time_diff_seconds = (falling_edge_time-rising_edge_time)/1000000.0; //10^6
     *distance = (float) speed_of_sound*time_diff_seconds*0.5f; //Assuming a straight line
-    printf("\nFalling edge; distance: %f",*distance);
-    printf("\nEnd time: %luus Start time: %luus",falling_edge_time,rising_edge_time);
-    printf("\nTime difference: %lfs",(time_diff_seconds));
+    //printf("\nFalling edge; distance: %f",*distance);
+    //printf("\nEnd time: %luus Start time: %luus",falling_edge_time,rising_edge_time);
+    //printf("\nTime difference: %lfs",(time_diff_seconds));
     us_waiting = false;
     us_in_progress = false;
 }

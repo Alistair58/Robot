@@ -13,6 +13,10 @@
 #include "data_structures.h"
 #include "imu.h"
 
+static bool he_update_speed(int ADC_PIN,bool *high,uint32_t *last_high,float *speed,int32_t curr_time);
+static void manage_pwm(pid_values *pid_vals);
+
+
 //Vehicle-related
 int32_t l_spoke_count = 0; //Needed in movement.h
 int32_t r_spoke_count = 0;
@@ -41,6 +45,8 @@ static uint l_slice_num; //Initialised in gpio_pins_init
 static uint l_channel;
 static uint r_slice_num;
 static uint r_channel;
+
+
 
 void driving_motors_init(void){
     //Enable PWM
@@ -123,6 +129,10 @@ void control_loop_blocking(void){
         DM_R_FORWARDS,
         DM_R_BACKWARDS
     };
+    kalman_values k_vals = {
+        1.5e-6,
+        time_us_32()
+    };
     while (1) {
         if(!connected){
             user_l_throttle = 50;
@@ -140,10 +150,7 @@ void control_loop_blocking(void){
         }
         
         if(counter==0){
-            gyro_read(gyro_vals);
-            mag_read(mag_vals);
-            calculate_rotation(l_spoke_count,r_spoke_count,gyro_vals,mag_vals);
-
+            calculate_heading(&k_vals);
             manage_pwm(&l_pid_vals);
             manage_pwm(&r_pid_vals);
         }
@@ -246,6 +253,3 @@ static void manage_pwm(pid_values *pid_vals){
 }
 
 
-static void calculate_rotation(int16_t l_spoke_count,int16_t r_spoke_count,float gyro_vals[3],float mag_vals[3]){
-    //Kalman filter
-}
