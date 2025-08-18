@@ -9,79 +9,40 @@
 #include "stepper_motor.h"
 #include "ultrasound.h"
 #include "auto_mode.h"
+#include "heading.h"
 
 void turn_robot(float radians, bool clockwise,int num_wheels_turning){
-    //Spoke in full rotation constants are empirical
-    if(num_wheels_turning==2){
-        //More unpredictable but less translational movement
-
-        //set one motor one direction and the other the other way
-        //count the number of spokes seen, want same number for both wheels
-        const float spokes_in_full_rotation =  39.2;
-        float target_spokes = roundf(spokes_in_full_rotation*(radians/(2*M_PI)));
-        //roundf allows for the robot to equally under- and over-rotate and so on average it ends up in the right place
-        //As opposed to floor
-
-        uint16_t l_start_spoke_count = l_spoke_count;
-        uint16_t r_start_spoke_count = r_spoke_count;
-        int32_t l_s_count = 0;
-        int32_t r_s_count = 0;
-        uint32_t curr_time = time_us_32();
-        const int update_interval = 10; //10ms
-        const int forwards_throttle = 90;
-        const int backwards_throttle = 10;
-        update_throttle((clockwise)?forwards_throttle:backwards_throttle,(clockwise)?backwards_throttle:forwards_throttle);
-        while (1) {
-            if(auto_mode && connected){
-                l_s_count = (int32_t)l_spoke_count - (int32_t)l_start_spoke_count;
-                if(l_s_count<0) l_s_count+= 0xffff; //spoke count can reset to zero if it goes past 65535
-                r_s_count = (int32_t)r_spoke_count - (int32_t)r_start_spoke_count;
-                if(r_s_count<0) r_s_count+= 0xffff;
-                
-                if(((int32_t)target_spokes) <= l_s_count && ((int32_t)target_spokes) <= r_s_count){
-                    update_throttle(50,50);
-                    return;
-                }
-                else if(((int32_t)target_spokes) == l_s_count){
-                    update_throttle(50,(clockwise)?backwards_throttle:forwards_throttle);
-                }
-                else if(((int32_t)target_spokes) == r_s_count){
-                    update_throttle((clockwise)?forwards_throttle:backwards_throttle,50);
-                }
-                sleep_ms(update_interval);
-            }
-            else{
-                core1_ended();
-            }   
-        }
-    }
-    else if(num_wheels_turning==1){
-        //More predictable but more translational movement
-        const float spokes_in_full_rotation =  77.8; 
-        //For a hard surface (tested on the chair mat) with the plastic lego wheels
-        float target_spokes = roundf(spokes_in_full_rotation*(radians/(2*M_PI)));
-        //roundf allows for the robot to equally under and over rotate and so on average it ends up in the right place
-        //as opposed to floor
-        int32_t start_spoke_count = clockwise?l_spoke_count:r_spoke_count;
-        int32_t s_count = 0;
-        int32_t *spoke_count = clockwise?&l_spoke_count:&r_spoke_count;
-        uint32_t curr_time = time_us_32();
-        const int update_interval = 10; //10ms
-        const int forwards_throttle = 90;
+    //More unpredictable but less translational movement
+    //set one motor one direction and the other the other way
+    float heading_change = 0;
+    float prev_heading = heading;
+    const int update_interval = 10; //10ms
+    const int forwards_throttle = 90;
+    const int backwards_throttle = 10;
+    if(num_wheels_turning==1){
         update_throttle((clockwise)?forwards_throttle:50,(clockwise)?50:forwards_throttle);
-        while (1) {
-            if(auto_mode && connected){
-                s_count = *spoke_count - start_spoke_count;
-                if(((int32_t)target_spokes) <= s_count){
-                    update_throttle(50,50);
-                    return;
-                }
-                sleep_ms(update_interval);
+    }
+    else{ //default is 2
+        update_throttle((clockwise)?forwards_throttle:backwards_throttle,(clockwise)?backwards_throttle:forwards_throttle);
+    }
+    while (1) {
+        if(auto_mode && connected){
+            heading_change += wrap(heading,prev_heading);
+            //printf("\nHeading change: %f",heading_change);
+            prev_heading = heading;
+            if(
+                (clockwise && heading_change >= radians) ||
+                (!clockwise && heading_change <= -radians)
+            ){
+                update_throttle(50,50);
+                //printf("\n\n\n\n\nSTOPPED");
+                return;
             }
-            else{
-                core1_ended();
-            }   
+            sleep_ms(update_interval);
         }
+        else{
+            core1_ended();
+        }   
     }
 }
 
@@ -92,7 +53,7 @@ void turn_robot_sleep(float radians, bool clockwise,int num_wheels_turning,int s
 }
 
 void turn_robot_safe(float radians, bool clockwise){
-    turn_robot_sleep(radians,clockwise,1,1000);
+    turn_robot_sleep(radians,clockwise,2,1000);
 }
 
 float straight(float distance,bool obstacle_avoidance_enabled){ 

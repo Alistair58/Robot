@@ -4,12 +4,16 @@ static int icm20948_read(uint8_t reg,uint8_t *buffer,int len);
 static int icm20948_write(uint8_t *buffer,int len);
 static int icm20948_write_byte(uint8_t reg,uint8_t byte);
 static bool icm20948_init();
+static void private_mag_read(float mag_data[3],bool with_calibration);
 static void private_gyro_read(float gyro_data[3],bool with_calibration);
 static void private_accel_read(float accel_data[3],bool with_calibration);
 static void calc_kalman_variances_blocking(void);
 static i2c_inst_t *i2c = i2c1;
 static float gyro_calibration_offset[3] = {0};
 static float accel_calibration_offset[3] = {0};
+//This is done as the magnetometer moves around and so isn't practical (and isn't necessary) to be computed dynamically
+//If the IMU moves/is re-blu-tacked please recalibrate
+static const float mag_calibration_offset[3] = {-66.7391305,57.8155845,53.166339};
 float mag_start_heading = 0;
 
 
@@ -113,9 +117,13 @@ static bool icm20948_init(){
     }
 }
 
-
-//Magnetometer doesn't get calibrated
+//Public-facing
 void mag_read(float mag_data[3]){
+    private_mag_read(mag_data,true);
+}
+
+//Internal
+static void private_mag_read(float mag_data[3],bool with_calibration){
     //Tell it to access magnetometer
     
     icm20948_write_byte(REG_BANK_SEL,BANK_3);
@@ -171,15 +179,19 @@ void mag_read(float mag_data[3]){
         int16_t raw_value = ((int16_t) mag_data_raw[i*2+1] << 8 | mag_data_raw[(i*2)]);
         float micro_tesla = (float)raw_value*4912/(32752); //Max raw value is 32752 which is 4912 micro tesla
         mag_data[i] = micro_tesla;
+        if(with_calibration){
+            mag_data[i] -= mag_calibration_offset[i];
+        }
     }
-    printf("\nMagnetometer - X: %f Y: %f Z: %f",mag_data[0],mag_data[1],mag_data[2]);
+    //printf("[%f,%f,%f],",mag_data[0],mag_data[1],mag_data[2]);
+    //printf("\nMagnetometer X: %f Y: %f Z: %f",mag_data[0],mag_data[1],mag_data[2]);
 }
 
 float get_mag_heading(void){ // between -pi and pi
     float mag_read_vals[3] = {0};
     mag_read(mag_read_vals);
-    //atan2(y,x) 
-    float mag_heading = atan2(mag_read_vals[1],mag_read_vals[0]);
+    //atan2(y,x) but we want clockwise as positive
+    float mag_heading = -1*atan2(mag_read_vals[1],mag_read_vals[0]);
     return mag_heading;
 }
 
@@ -202,7 +214,8 @@ float get_yaw_rate(){
     float gyro_data[3] = {0};
     gyro_read(gyro_data);
     //yaw is rotation about z axis
-    float rads =  gyro_data[2]*M_PI/180; 
+    //For +ve to be clockwise we need to make it negative
+    float rads =  -1*gyro_data[2]*M_PI/180; 
     return rads; 
 }
 

@@ -32,8 +32,7 @@ void auto_mode_actions(void){
     float distance;
     int direction = 0;
     while(1){
-        straight(1,true);
-        sleep_ms(10000);
+        turn_robot_safe(M_PI_2,true);
     }
 }
 

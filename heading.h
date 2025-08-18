@@ -15,5 +15,6 @@ typedef struct kalman_values{
 
 extern float heading;
 void calculate_heading(kalman_values *k_vals);
+double wrap(double x,double y);
 
 #endif
