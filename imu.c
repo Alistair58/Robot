@@ -13,7 +13,7 @@ static float gyro_calibration_offset[3] = {0};
 static float accel_calibration_offset[3] = {0};
 //This is done as the magnetometer moves around and so isn't practical (and isn't necessary) to be computed dynamically
 //If the IMU moves/is re-blu-tacked please recalibrate
-static const float mag_calibration_offset[3] = {-66.7391305,57.8155845,53.166339};
+static const float mag_calibration_offset[3] = {-65.70683360050796,56.294480615145005,53.166339};
 float mag_start_heading = 0;
 
 

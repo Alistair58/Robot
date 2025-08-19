@@ -14,8 +14,7 @@
 
 
 //TODO
-//Fix magnetometer positioning
-//Test kalman filter
+//Use PID on turning
 //Test auto mode
 
 

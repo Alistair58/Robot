@@ -27,15 +27,15 @@ void turn_robot(float radians, bool clockwise,int num_wheels_turning){
     }
     while (1) {
         if(auto_mode && connected){
-            heading_change += wrap(heading,prev_heading);
-            //printf("\nHeading change: %f",heading_change);
+            heading_change += heading-prev_heading;
+            printf("\nHeading change: %f",heading_change);
             prev_heading = heading;
             if(
                 (clockwise && heading_change >= radians) ||
                 (!clockwise && heading_change <= -radians)
             ){
                 update_throttle(50,50);
-                //printf("\n\n\n\n\nSTOPPED");
+                printf("\n\n\n\n\nSTOPPED");
                 return;
             }
             sleep_ms(update_interval);
