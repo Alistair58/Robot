@@ -36,9 +36,9 @@ static float r_duty = 0;
 //Integral is good for maintaining the current speed and produces stable behaviour
 //but if it is too high, it will be very slow to respond
 //Derivative suffers from the drawback of proportion and so has a very low relative weight 
-static const float p_weight = 70; //90
-static const float i_weight = 1e-4; //1e-4
-static const float d_weight = 0; //5e4
+static const float p_weight = 70; 
+static const float i_weight = 1e-4; 
+static const float d_weight = 0; 
 static const float pid_l_weight = 0.9f;
 static const float pid_r_weight = 1.0f;
 static uint l_slice_num; //Initialised in gpio_pins_init
@@ -96,9 +96,11 @@ void control_loop_blocking(void){
     uint32_t last_r_high = 0; //it starts counting when we hit a spoke
     uint32_t last_l_high = 0;
     uint32_t curr_time = time_us_32();
-    const int update_interval = 2; //2ms
-    int counter = 0;
+    const int update_interval = 0; //The functions seem to be slow enough
+    int pwm_counter = 0;
+    int heading_counter = 0;
     const int pwm_update_ratio = 20; //higher = less updates
+    const int heading_update_ratio = 2;
     float gyro_vals[3] = {0};
     float mag_vals[3] = {0};
     pid_values l_pid_vals = {
@@ -149,12 +151,15 @@ void control_loop_blocking(void){
             else r_spoke_count--;
         }
         
-        if(counter==0){
-            calculate_heading(&k_vals);
+        if(pwm_counter==0){
             manage_pwm(&l_pid_vals);
             manage_pwm(&r_pid_vals);
         }
-        counter = (counter+1)%pwm_update_ratio;
+        if(heading_counter==0){
+            calculate_heading(&k_vals);
+        }
+        pwm_counter = (pwm_counter+1)%pwm_update_ratio;
+        heading_counter = (heading_counter+1)%heading_update_ratio;
         sleep_ms(update_interval);
     }
 }

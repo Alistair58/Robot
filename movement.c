@@ -11,33 +11,79 @@
 #include "auto_mode.h"
 #include "heading.h"
 
+static const float p_weight = 30; //makes it go
+static const float i_overshoot_weight = 8e-6; //Gets it started if we overshot
+static const float i_undershoot_weight = 2e-6; //Keeps it going so we don't undershoot
+static const float d_weight = 4e6; //damps it
+
 void turn_robot(float radians, bool clockwise,int num_wheels_turning){
     //More unpredictable but less translational movement
     //set one motor one direction and the other the other way
     float heading_change = 0;
     float prev_heading = heading;
-    const int update_interval = 10; //10ms
-    const int forwards_throttle = 90;
-    const int backwards_throttle = 10;
-    if(num_wheels_turning==1){
-        update_throttle((clockwise)?forwards_throttle:50,(clockwise)?50:forwards_throttle);
-    }
-    else{ //default is 2
-        update_throttle((clockwise)?forwards_throttle:backwards_throttle,(clockwise)?backwards_throttle:forwards_throttle);
-    }
+    const int update_interval = 40; //40ms - roughly the heading update period
+    float throttle = 0; // between -50 and 50 i.e. we could be turning the other way
+    uint32_t last_time = time_us_32();
+    float last_error = radians;
+    float integral = 0;
+    uint16_t settle_count = 0;
+    uint16_t settle_threshold = 10; //40*10 = 400ms
+    float epsilon = 4*M_PI/180; //+-4 degrees
     while (1) {
         if(auto_mode && connected){
+            if(heading_change+epsilon >= radians && heading_change-epsilon <= radians ){
+                settle_count++; //Like a boxing K.O. count
+                if(settle_count>=settle_threshold){
+                    update_throttle(50,50);
+                    printf("\n\n\n\n\nSTOPPED\n\n\n\n\n");
+                    return;
+                }
+            }
+            else{
+                settle_count = 0;
+            }
             heading_change += heading-prev_heading;
             printf("\nHeading change: %f",heading_change);
-            prev_heading = heading;
-            if(
-                (clockwise && heading_change >= radians) ||
-                (!clockwise && heading_change <= -radians)
-            ){
-                update_throttle(50,50);
-                printf("\n\n\n\n\nSTOPPED");
-                return;
+            float error = radians-heading_change; //also proportional
+            uint32_t curr_time = time_us_32();
+            int dt = curr_time-last_time; //in microseconds
+            float derivative = (float)(error-last_error)/dt;
+            integral += error*dt;
+            //anti-windup
+            if(error<0 != last_error<0){
+                integral = 0; 
             }
+            throttle =  p_weight*error +
+                        d_weight*derivative; 
+            if(error>0 == clockwise){ //i.e. we're undershooting 
+                printf("\nUndershooting error>0 %d clockwise %d",error>0,clockwise);
+                //Integral causes overshooting on the way there and so isn't very helpful
+                //Undershoot weight is typically lower
+                if(fabs(integral*i_undershoot_weight)>20.0){
+                    integral = ((integral>0)?1:-1) * 20.0/i_undershoot_weight;
+                }
+                throttle += i_undershoot_weight*integral;
+            }
+            else{ //i.e. we're overshooting
+                printf("\nOvershooting error>0 %d clockwise %d",error>0,clockwise);
+                //But is useful for correcting an overshoot
+                if(fabs(integral*i_overshoot_weight)>20.0){
+                    integral = ((integral>0)?1:-1) * 20.0/i_overshoot_weight;
+                }
+                throttle += i_overshoot_weight*integral;
+            }
+            printf("\nP: %f IU: %f IO: %f D: %f Throttle: %f",p_weight*error,i_undershoot_weight*integral,i_overshoot_weight*integral,d_weight*derivative,throttle);
+            if(throttle>50) throttle = 50;
+            if(throttle<-50) throttle = -50;
+            if(num_wheels_turning==1){
+                update_throttle((clockwise)?50+throttle:50,(clockwise)?50:50+throttle);
+            }
+            else{ //default is 2
+                update_throttle((clockwise)?50+throttle:50-throttle,(clockwise)?50-throttle:50+throttle);
+            }
+            prev_heading = heading;
+            last_time = curr_time;
+            last_error = error;
             sleep_ms(update_interval);
         }
         else{
