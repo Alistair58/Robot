@@ -86,8 +86,8 @@ void driving_motors_init(void){
 void update_throttle(uint8_t left_throttle_new,uint8_t right_throttle_new){ //Called by att_write_callback in ble.h
     //0<= throttle <=100
     //if(user_l_throttle!=left_throttle_new || user_r_throttle!=right_throttle_new) printf("\nL: %d R: %d",left_throttle_new,right_throttle_new);
-    user_l_throttle = left_throttle_new;
-    user_r_throttle = right_throttle_new;
+    user_l_throttle = max(min(100,left_throttle_new),0);
+    user_r_throttle = max(min(100,right_throttle_new),0);
 }
 
 void control_loop_blocking(void){
